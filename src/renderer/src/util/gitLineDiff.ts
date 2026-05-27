@@ -163,3 +163,45 @@ export const buildAlignedLineDiff = (oldContent: string, newContent: string): Al
   flushPending()
   return rows
 }
+
+export type ScrollbarMarkKind = 'del' | 'add' | 'change'
+
+export interface ScrollbarMark {
+  rowIndex: number
+  kind: ScrollbarMarkKind
+}
+
+export const DIFF_VIEW_LINE_HEIGHT_PX = 20
+
+export const scrollbarMarkStyle = (
+  rowIndex: number,
+  totalRows: number
+): { top: string; height: string } => {
+  if (totalRows <= 0) {
+    return { top: '0%', height: '0%' }
+  }
+  const topPercent = (rowIndex / totalRows) * 100
+  const heightPercent = Math.max(100 / totalRows, 0.6)
+  return {
+    top: `${topPercent}%`,
+    height: `${heightPercent}%`
+  }
+}
+
+export const oldPaneScrollbarMarks = (rows: AlignedDiffRow[]): ScrollbarMark[] => {
+  const marks: ScrollbarMark[] = []
+  rows.forEach((row, rowIndex) => {
+    if (row.kind === 'delete') marks.push({ rowIndex, kind: 'del' })
+    else if (row.kind === 'change') marks.push({ rowIndex, kind: 'change' })
+  })
+  return marks
+}
+
+export const newPaneScrollbarMarks = (rows: AlignedDiffRow[]): ScrollbarMark[] => {
+  const marks: ScrollbarMark[] = []
+  rows.forEach((row, rowIndex) => {
+    if (row.kind === 'insert') marks.push({ rowIndex, kind: 'add' })
+    else if (row.kind === 'change') marks.push({ rowIndex, kind: 'change' })
+  })
+  return marks
+}

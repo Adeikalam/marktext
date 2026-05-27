@@ -349,7 +349,8 @@
     "diff": {
       "title": "Review changes",
       "close": "Close",
-      "summary": "{added} lines added, {removed} lines removed"
+      "summary": "{added} lines added, {removed} lines removed",
+      "scrollToChange": "Jump to this change"
     },
     "errors": {
       "unknown": "Something went wrong. Please try again."

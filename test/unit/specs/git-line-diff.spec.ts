@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildAlignedLineDiff } from '../../../src/renderer/src/util/gitLineDiff'
+import {
+  buildAlignedLineDiff,
+  newPaneScrollbarMarks,
+  oldPaneScrollbarMarks,
+  scrollbarMarkStyle
+} from '../../../src/renderer/src/util/gitLineDiff'
 
 describe('gitLineDiff', () => {
   it('aligns equal lines with shared line numbers', () => {
@@ -60,6 +65,13 @@ describe('gitLineDiff', () => {
         newSegments: null
       }
     ])
+  })
+
+  it('builds scrollbar marks for changed rows', () => {
+    const rows = buildAlignedLineDiff('a\nb', 'a\nc')
+    expect(oldPaneScrollbarMarks(rows)).toEqual([{ rowIndex: 1, kind: 'change' }])
+    expect(newPaneScrollbarMarks(rows)).toEqual([{ rowIndex: 1, kind: 'change' }])
+    expect(scrollbarMarkStyle(1, 2)).toEqual({ top: '50%', height: '50%' })
   })
 
   it('shows delete-only lines on the old side', () => {
