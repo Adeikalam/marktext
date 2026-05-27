@@ -8,6 +8,7 @@ import type {
   GitStatusResult
 } from '@shared/types/git'
 import { cloneRepository } from '../git/clone'
+import { listBranches, switchBranch } from '../git/branches'
 import {
   commitChanges,
   detectRepo,
@@ -46,6 +47,24 @@ export const registerGitHandlers = (): void => {
   ipcMain.handle('mt::git::status', async(_event, startPath: string) => {
     try {
       return await getStatus(startPath)
+    } catch (err) {
+      throw rethrowUserError(err)
+    }
+  })
+
+  ipcMain.handle('mt::git::list-branches', async(_event, repoRoot: string) => {
+    try {
+      return await listBranches(repoRoot)
+    } catch (err) {
+      throw rethrowUserError(err)
+    }
+  })
+
+  ipcMain.handle('mt::git::switch-branch', async(event, repoRoot: string, branchName: string) => {
+    try {
+      const status = await switchBranch(repoRoot, branchName)
+      sendIfAlive(event.sender, 'mt::git::status-changed', status)
+      return status
     } catch (err) {
       throw rethrowUserError(err)
     }

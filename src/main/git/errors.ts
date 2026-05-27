@@ -7,10 +7,14 @@ const USER_MESSAGES: Record<GitErrorCode, string> = {
   push_rejected: 'Get latest changes first, then share again.',
   network_failure: "Couldn't reach the server. Check your internet connection.",
   pull_conflicts: "We couldn't automatically combine changes. Your file still has your edits.",
-  ff_only_failed: 'Get latest changes first, then share again.',
+  ff_only_failed:
+    "Your version and the team's version have diverged. Share your snapshots first, then get latest changes.",
   invalid_url: 'That link does not look like a valid repository URL.',
   path_exists: 'A folder already exists at that location.',
   git_not_found: "Git isn't installed. Install Git and restart MarkText to use Source Control.",
+  checkout_blocked:
+    'Your changes conflict with that version line. Share or discard them first, then try again.',
+  branch_not_found: "That version line doesn't exist on the server.",
   unknown: 'Something went wrong. Please try again.'
 }
 
@@ -27,6 +31,13 @@ export const rethrowUserError = (err: unknown, fallback: GitErrorCode = 'unknown
 }
 
 const mapErrorCode = (err: unknown, fallback: GitErrorCode): GitErrorCode => {
+  if (err && typeof err === 'object' && 'code' in err) {
+    const code = (err as GitUserError).code
+    if (code in USER_MESSAGES) {
+      return code
+    }
+  }
+
   const message =
     err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? '')
   const lower = message.toLowerCase()
@@ -40,6 +51,9 @@ const mapErrorCode = (err: unknown, fallback: GitErrorCode): GitErrorCode => {
   if (message === 'invalid_url') return 'invalid_url'
   if (message === 'not_a_repo') return 'not_a_repo'
   if (message === 'path_exists') return 'path_exists'
+  if (message === 'checkout_blocked' || message === 'branch_not_found') {
+    return message as GitErrorCode
+  }
   if (message === 'pull_conflicts' || message === 'ff_only_failed') return message as GitErrorCode
   if (
     lower.includes('could not resolve host') ||
@@ -65,6 +79,19 @@ const mapErrorCode = (err: unknown, fallback: GitErrorCode): GitErrorCode => {
   }
   if (lower.includes('not our ref') || lower.includes('non-fast-forward') || lower.includes('rejected')) {
     return 'push_rejected'
+  }
+  if (
+    lower.includes('local changes to the following files') ||
+    lower.includes('would be overwritten by checkout') ||
+    lower.includes('would be overwritten by switch')
+  ) {
+    return 'checkout_blocked'
+  }
+  if (lower.includes('pathspec') && lower.includes('did not match')) {
+    return 'branch_not_found'
+  }
+  if (lower.includes('invalid reference')) {
+    return 'branch_not_found'
   }
   return fallback
 }

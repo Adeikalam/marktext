@@ -18,10 +18,66 @@
     </div>
 
     <div
-      v-if="branchLabel"
+      v-if="gitStore.branch && gitStore.isRepo"
       class="branch-line"
     >
-      {{ branchLabel }}
+      <span class="branch-prefix">{{ t('sideBar.git.workingOnPrefix') }}</span>
+      <el-popover
+        v-model:visible="branchPickerVisible"
+        placement="bottom-start"
+        :width="220"
+        trigger="click"
+        popper-class="git-branch-popover"
+        @show="onBranchPickerShow"
+      >
+        <template #reference>
+          <el-button
+            class="branch-button"
+            text
+            bg
+            :aria-label="t('sideBar.git.switchBranch')"
+          >
+            {{ gitStore.branch }}
+            <el-icon class="branch-chevron">
+              <ArrowDown />
+            </el-icon>
+          </el-button>
+        </template>
+        <div class="branch-picker">
+          <div
+            v-if="gitStore.isBranchPickerLoading"
+            class="branch-picker-loading"
+          >
+            {{ t('sideBar.git.loadingBranches') }}
+          </div>
+          <ul
+            v-else-if="gitStore.branches.length"
+            class="branch-list"
+          >
+            <li
+              v-for="branch in gitStore.branches"
+              :key="branch.name"
+              class="branch-item"
+              :class="{ current: branch.current }"
+            >
+              <button
+                type="button"
+                class="branch-item-button"
+                :disabled="branch.current || gitStore.isLoading"
+                @click="selectBranch(branch.name)"
+              >
+                {{ branch.name }}
+              </button>
+            </li>
+          </ul>
+          <div
+            v-else
+            class="branch-picker-empty"
+          >
+            {{ t('sideBar.git.branchSwitchFailed') }}
+          </div>
+        </div>
+      </el-popover>
     </div>
 
     <div
@@ -192,14 +248,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useGitStore } from '@/store/git'
 import { useProjectStore } from '@/store/project'
 import { useLayoutStore } from '@/store/layout'
 import type { GitChangedFile } from '@shared/types/git'
 import { t } from '@/i18n'
-import { RefreshRight, Delete } from '@element-plus/icons-vue'
+import { RefreshRight, Delete, ArrowDown } from '@element-plus/icons-vue'
 import Loading from '@/components/loading/index.vue'
 
 const gitStore = useGitStore()
@@ -207,13 +263,9 @@ const projectStore = useProjectStore()
 const layoutStore = useLayoutStore()
 const { projectTree } = storeToRefs(projectStore)
 const { rightColumn } = storeToRefs(layoutStore)
+const branchPickerVisible = ref(false)
 
 const showNoFolder = computed(() => !projectTree.value?.pathname)
-
-const branchLabel = computed(() => {
-  if (!gitStore.branch) return ''
-  return t('sideBar.git.workingOn', { branch: gitStore.branch })
-})
 
 const changesTitle = computed(() => {
   return t('sideBar.git.yourChanges', { count: gitStore.changedFiles.length })
@@ -264,6 +316,18 @@ const discardFile = (file: GitChangedFile): void => {
   gitStore.discardChanges(file.path, file.kind).catch(() => {})
 }
 
+const onBranchPickerShow = (): void => {
+  gitStore.loadBranches().catch(() => {})
+}
+
+const selectBranch = (branchName: string): void => {
+  gitStore.switchBranch(branchName).then((success) => {
+    if (success) {
+      branchPickerVisible.value = false
+    }
+  })
+}
+
 watch(rightColumn, (column) => {
   if (column === 'git') {
     gitStore.refresh().catch(() => {})
@@ -309,9 +373,36 @@ onUnmounted(() => {
   margin: 0 0 8px;
 }
 .branch-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 12px;
+}
+.branch-prefix {
+  color: var(--sideBarTextColor, var(--editorColor));
+}
+.branch-line :deep(.branch-button.el-button.is-text.is-has-bg) {
+  background-color: var(--itemBgColor);
+  color: var(--themeColor);
+  border-color: transparent;
+  box-shadow: none;
+}
+.branch-line :deep(.branch-button.el-button.is-text.is-has-bg:hover),
+.branch-line :deep(.branch-button.el-button.is-text.is-has-bg:focus) {
+  background-color: var(--floatHoverColor);
+  color: var(--themeColor);
+}
+.branch-button {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 2px 8px;
+  height: auto;
+}
+.branch-chevron {
+  margin-left: 2px;
 }
 .empty-state,
 .empty-changes {
@@ -449,5 +540,66 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+</style>
+
+<style>
+/* Popover is teleported to body — theme it globally like other float panels. */
+.git-branch-popover.el-popper {
+  background: var(--floatBgColor) !important;
+  border: 1px solid var(--floatBorderColor) !important;
+  box-shadow: 0 4px 8px 0 var(--floatBorderColor);
+  padding: 4px 0 !important;
+  min-width: 180px;
+}
+
+.git-branch-popover.el-popper .el-popper__arrow::before {
+  background: var(--floatBgColor) !important;
+  border: 1px solid var(--floatBorderColor) !important;
+}
+
+.git-branch-popover .branch-picker {
+  min-width: 180px;
+}
+
+.git-branch-popover .branch-picker-loading,
+.git-branch-popover .branch-picker-empty {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--floatFontColor);
+}
+
+.git-branch-popover .branch-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.git-branch-popover .branch-item-button {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--editorColor);
+}
+
+.git-branch-popover .branch-item-button:hover:not(:disabled) {
+  background: var(--floatHoverColor);
+}
+
+.git-branch-popover .branch-item-button:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.git-branch-popover .branch-item.current .branch-item-button {
+  font-weight: 600;
+  color: var(--themeColor);
 }
 </style>

@@ -231,6 +231,9 @@ type GitHandler<T = unknown> = (payload: T) => void
 const gitAPI = {
   detectRepo: (startPath: string) => invoke('mt::git::detect-repo', startPath),
   status: (startPath: string) => invoke('mt::git::status', startPath),
+  listBranches: (repoRoot: string) => invoke('mt::git::list-branches', repoRoot),
+  switchBranch: (repoRoot: string, branchName: string) =>
+    invoke('mt::git::switch-branch', repoRoot, branchName),
   fetch: (repoRoot: string) => invoke('mt::git::fetch', repoRoot),
   diff: (repoRoot: string, filePath: string) => invoke('mt::git::diff', repoRoot, filePath),
   discard: (repoRoot: string, filePath: string, kind: import('@shared/types/git').GitFileChangeKind) =>

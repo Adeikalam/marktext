@@ -1,3 +1,4 @@
+import fs from 'fs/promises'
 import path from 'path'
 import { GitCommandError, runGit } from './runner'
 
@@ -5,6 +6,8 @@ export interface FileDiffResult {
   unifiedDiff: string
   additions: number
   deletions: number
+  oldContent: string
+  newContent: string
 }
 
 const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null'
@@ -33,6 +36,24 @@ const runDiff = async(repoRoot: string, args: string[]): Promise<string> => {
   }
 }
 
+const readHeadContent = async (repoRoot: string, rel: string): Promise<string> => {
+  try {
+    const { stdout } = await runGit(['show', `HEAD:${rel}`], { cwd: repoRoot })
+    return stdout
+  } catch (err) {
+    if (err instanceof GitCommandError) return ''
+    throw err
+  }
+}
+
+const readWorkingContent = async (absPath: string): Promise<string> => {
+  try {
+    return await fs.readFile(absPath, 'utf8')
+  } catch {
+    return ''
+  }
+}
+
 export const diffFile = async(repoRoot: string, filePath: string): Promise<FileDiffResult> => {
   const rel = filePath.replace(/\\/g, '/')
   const absPath = path.join(repoRoot, rel)
@@ -43,5 +64,10 @@ export const diffFile = async(repoRoot: string, filePath: string): Promise<FileD
   }
 
   const { additions, deletions } = countDiffStats(unifiedDiff)
-  return { unifiedDiff, additions, deletions }
+  const [oldContent, newContent] = await Promise.all([
+    readHeadContent(repoRoot, rel),
+    readWorkingContent(absPath)
+  ])
+
+  return { unifiedDiff, additions, deletions, oldContent, newContent }
 }

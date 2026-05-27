@@ -21,11 +21,18 @@ export interface GitStatusResult {
   changedFiles: GitChangedFile[]
 }
 
+export interface GitBranch {
+  name: string
+  current: boolean
+}
+
 export interface GitDiffResult {
   path: string
   unifiedDiff: string
   additions: number
   deletions: number
+  oldContent: string
+  newContent: string
 }
 
 export interface GitCredentials {
@@ -79,6 +86,8 @@ export type GitErrorCode =
   | 'invalid_url'
   | 'path_exists'
   | 'git_not_found'
+  | 'checkout_blocked'
+  | 'branch_not_found'
   | 'unknown'
 
 export interface GitUserError {

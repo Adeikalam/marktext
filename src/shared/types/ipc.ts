@@ -33,6 +33,7 @@ import type {
 import type { BufferedState as BufferedStateType } from './bufferedState'
 import type { MenuTemplate, MenuPopupPosition } from './menu'
 import type {
+  GitBranch,
   GitCloneRequest,
   GitCloneResult,
   GitCommitRequest,
@@ -69,6 +70,8 @@ export interface IpcInvokeChannels {
   'mt::git::host-key-for-repo': { args: [repoRoot: string]; ret: string | null }
   'mt::git::host-key-from-url': { args: [url: string]; ret: string }
   'mt::git::is-authenticated': { args: [hostKey: string]; ret: boolean }
+  'mt::git::list-branches': { args: [repoRoot: string]; ret: GitBranch[] }
+  'mt::git::switch-branch': { args: [repoRoot: string, branchName: string]; ret: GitStatusResult }
   'mt::git::save-credentials': {
     args: [hostKey: string, credentials: GitCredentials]
     ret: void

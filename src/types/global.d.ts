@@ -168,6 +168,11 @@ declare global {
   interface GitAPI {
     detectRepo(startPath: string): Promise<string | null>
     status(startPath: string): Promise<import('@shared/types/git').GitStatusResult>
+    listBranches(repoRoot: string): Promise<import('@shared/types/git').GitBranch[]>
+    switchBranch(
+      repoRoot: string,
+      branchName: string
+    ): Promise<import('@shared/types/git').GitStatusResult>
     fetch(repoRoot: string): Promise<import('@shared/types/git').GitStatusResult>
     diff(repoRoot: string, filePath: string): Promise<import('@shared/types/git').GitDiffResult>
     discard(

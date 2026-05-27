@@ -29,6 +29,12 @@
   --editorColor04: rgba(0, 0, 0, 0.03);
   --editorBgColor: rgba(255, 255, 255, 1);
   --deleteColor: #ff6969;
+  --gitDiffAddColor: #3fb950;
+  --gitDiffDelColor: #f85149;
+  --gitDiffAddBg: rgba(63, 185, 80, 0.12);
+  --gitDiffDelBg: rgba(248, 81, 73, 0.12);
+  --gitDiffHunkColor: var(--themeColor);
+  --gitDiffMetaColor: var(--editorColor50);
   --iconColor: #6b737b;
   --codeBgColor: #d8d8d869;
   --codeBlockBgColor: rgba(0, 0, 0, 0.03);

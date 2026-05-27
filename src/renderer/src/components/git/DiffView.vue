@@ -1,19 +1,80 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="diffTitle"
-    width="720px"
+    width="min(1100px, 92vw)"
     destroy-on-close
     class="git-diff-dialog"
     @closed="onClose"
   >
+    <template #header>
+      <div class="diff-header">
+        <span
+          class="diff-filename"
+          :title="diffTitle"
+        >{{ diffTitle }}</span>
+      </div>
+    </template>
     <p
       v-if="summary"
       class="summary"
     >
-      {{ summary }}
+      <template v-if="summaryHasColoredParts">
+        <span class="summary-added">{{ additions }}</span>{{ summaryBetweenCounts }}<span class="summary-removed">{{ deletions }}</span>{{ summaryAfterRemoved }}
+      </template>
+      <template v-else>
+        {{ summary }}
+      </template>
     </p>
-    <pre class="diff-content"><code>{{ diffText }}</code></pre>
+    <div class="diff-split">
+      <div
+        ref="oldPaneRef"
+        class="diff-pane"
+        @scroll="syncScroll('old', $event)"
+      >
+        <div
+          v-for="(row, i) in alignedRows"
+          :key="`old-${i}`"
+          class="diff-row"
+          :class="oldRowClass(row)"
+        >
+          <span class="diff-gutter">{{ row.oldLineNumber ?? '' }}</span>
+          <span class="diff-code">
+            <template v-if="row.oldText === null">&nbsp;</template>
+            <template v-else-if="row.kind === 'change' && row.oldSegments">
+              <template
+                v-for="(seg, j) in row.oldSegments"
+                :key="j"
+              ><span :class="{ 'diff-chunk--del': seg.type === 'change' }">{{ seg.text }}</span></template>
+            </template>
+            <template v-else>{{ row.oldText }}</template>
+          </span>
+        </div>
+      </div>
+      <div
+        ref="newPaneRef"
+        class="diff-pane"
+        @scroll="syncScroll('new', $event)"
+      >
+        <div
+          v-for="(row, i) in alignedRows"
+          :key="`new-${i}`"
+          class="diff-row"
+          :class="newRowClass(row)"
+        >
+          <span class="diff-gutter">{{ row.newLineNumber ?? '' }}</span>
+          <span class="diff-code">
+            <template v-if="row.newText === null">&nbsp;</template>
+            <template v-else-if="row.kind === 'change' && row.newSegments">
+              <template
+                v-for="(seg, j) in row.newSegments"
+                :key="j"
+              ><span :class="{ 'diff-chunk--add': seg.type === 'change' }">{{ seg.text }}</span></template>
+            </template>
+            <template v-else>{{ row.newText }}</template>
+          </span>
+        </div>
+      </div>
+    </div>
     <template #footer>
       <el-button @click="visible = false">
         {{ t('git.diff.close') }}
@@ -23,11 +84,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useGitStore } from '@/store/git'
 import { t } from '@/i18n'
+import { DEFAULT_CODE_FONT_FAMILY } from '@/config'
+import { buildAlignedLineDiff, type AlignedDiffRow } from '@/util/gitLineDiff'
+
+const codeFontFamily = DEFAULT_CODE_FONT_FAMILY
 
 const gitStore = useGitStore()
+const oldPaneRef = ref<HTMLElement | null>(null)
+const newPaneRef = ref<HTMLElement | null>(null)
+const syncingScroll = ref(false)
 
 const visible = computed({
   get: () => gitStore.showDiff,
@@ -36,8 +104,16 @@ const visible = computed({
   }
 })
 
-const diffText = computed(() => gitStore.diffResult?.unifiedDiff ?? '')
 const diffTitle = computed(() => gitStore.diffResult?.path ?? t('git.diff.title'))
+
+const alignedRows = computed(() => {
+  const diff = gitStore.diffResult
+  if (!diff) return []
+  return buildAlignedLineDiff(diff.oldContent, diff.newContent)
+})
+
+const additions = computed(() => gitStore.diffResult?.additions ?? 0)
+const deletions = computed(() => gitStore.diffResult?.deletions ?? 0)
 
 const summary = computed(() => {
   const diff = gitStore.diffResult
@@ -45,27 +121,169 @@ const summary = computed(() => {
   return t('git.diff.summary', { added: diff.additions, removed: diff.deletions })
 })
 
+const summaryHasColoredParts = computed(() => {
+  const diff = gitStore.diffResult
+  if (!diff) return false
+  const full = t('git.diff.summary', { added: diff.additions, removed: diff.deletions })
+  const addedStr = String(diff.additions)
+  const removedStr = String(diff.deletions)
+  const addedIdx = full.indexOf(addedStr)
+  const removedIdx = full.indexOf(removedStr)
+  return addedIdx !== -1 && removedIdx !== -1 && removedIdx > addedIdx
+})
+
+const summaryBetweenCounts = computed(() => {
+  const diff = gitStore.diffResult
+  if (!diff) return ''
+  const full = t('git.diff.summary', { added: diff.additions, removed: diff.deletions })
+  const addedStr = String(diff.additions)
+  const removedStr = String(diff.deletions)
+  const addedIdx = full.indexOf(addedStr)
+  const removedIdx = full.indexOf(removedStr)
+  return full.slice(addedIdx + addedStr.length, removedIdx)
+})
+
+const summaryAfterRemoved = computed(() => {
+  const diff = gitStore.diffResult
+  if (!diff) return ''
+  const full = t('git.diff.summary', { added: diff.additions, removed: diff.deletions })
+  const removedStr = String(diff.deletions)
+  const removedIdx = full.indexOf(removedStr)
+  if (removedIdx === -1) return ''
+  return full.slice(removedIdx + removedStr.length)
+})
+
+const oldRowClass = (row: AlignedDiffRow): Record<string, boolean> => ({
+  'diff-row--equal': row.kind === 'equal',
+  'diff-row--del': row.kind === 'delete' || row.kind === 'change',
+  'diff-row--empty': row.oldText === null
+})
+
+const newRowClass = (row: AlignedDiffRow): Record<string, boolean> => ({
+  'diff-row--equal': row.kind === 'equal',
+  'diff-row--add': row.kind === 'insert' || row.kind === 'change',
+  'diff-row--empty': row.newText === null
+})
+
+const syncScroll = (source: 'old' | 'new', event: Event): void => {
+  if (syncingScroll.value) return
+  const target = event.target as HTMLElement
+  const other = source === 'old' ? newPaneRef.value : oldPaneRef.value
+  if (!other || other.scrollTop === target.scrollTop) return
+  syncingScroll.value = true
+  other.scrollTop = target.scrollTop
+  window.setTimeout(() => {
+    syncingScroll.value = false
+  }, 0)
+}
+
 const onClose = (): void => {
   gitStore.closeDiff()
 }
 </script>
 
 <style scoped>
+.diff-header {
+  padding-right: 24px;
+}
+.diff-filename {
+  display: block;
+  font-family: v-bind(codeFontFamily);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--editorColor80);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .summary {
   margin: 0 0 12px;
   font-size: 13px;
   color: var(--editorColor50);
 }
-.diff-content {
-  max-height: 60vh;
-  overflow: auto;
-  background: var(--editorBgColor);
-  border: 1px solid var(--borderColor);
+.summary-added {
+  color: var(--gitDiffAddColor);
+  font-weight: 600;
+}
+.summary-removed {
+  color: var(--gitDiffDelColor);
+  font-weight: 600;
+}
+.diff-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  height: 65vh;
+  max-height: 65vh;
+  border: 1px solid var(--editorColor10);
   border-radius: 4px;
-  padding: 12px;
+  overflow: hidden;
+  background: var(--codeBlockBgColor);
+}
+.diff-pane {
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: v-bind(codeFontFamily);
   font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
+  line-height: 20px;
+}
+.diff-pane + .diff-pane {
+  border-left: 1px solid var(--editorColor10);
+}
+.diff-row {
+  display: flex;
+  min-height: 20px;
+  color: var(--editorColor);
+}
+.diff-row--equal {
+  background: transparent;
+}
+.diff-row--del {
+  background: var(--gitDiffDelBg);
+}
+.diff-row--add {
+  background: var(--gitDiffAddBg);
+}
+.diff-row--empty {
+  background: var(--editorColor04);
+}
+.diff-gutter {
+  flex: 0 0 44px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--editorColor40);
+  user-select: none;
+  border-right: 1px solid var(--editorColor04);
+}
+.diff-code {
+  flex: 1;
+  min-width: 0;
+  padding: 0 12px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.diff-chunk--del {
+  color: var(--gitDiffDelColor);
+  background: rgba(248, 81, 73, 0.28);
+  border-radius: 2px;
+}
+.diff-chunk--add {
+  color: var(--gitDiffAddColor);
+  background: rgba(63, 185, 80, 0.28);
+  border-radius: 2px;
+}
+</style>
+
+<style>
+.git-diff-dialog .el-dialog__body {
+  overflow: visible;
+}
+.git-diff-dialog .el-dialog__headerbtn .el-dialog__close {
+  color: var(--editorColor50);
+}
+.git-diff-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+  color: var(--editorColor80);
 }
 </style>

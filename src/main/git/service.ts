@@ -11,9 +11,9 @@ import type {
 import { hostKeyForRepo } from './auth'
 import { diffFile } from './diff'
 import { findRepoRoot } from './parse'
-import { GitCommandError, runGit } from './runner'
+import { runGit } from './runner'
 import { parseAheadBehind, parsePorcelainV1 } from './porcelain'
-import { toUserError } from './errors'
+import { rethrowUserError } from './errors'
 
 const currentBranchOrNull = async(repoRoot: string): Promise<string | null> => {
   try {
@@ -38,6 +38,28 @@ const countAheadBehind = async(
   } catch {
     return { ahead: 0, behind: 0 }
   }
+}
+
+const isShallowRepository = async(repoRoot: string): Promise<boolean> => {
+  try {
+    const { stdout } = await runGit(['rev-parse', '--is-shallow-repository'], { cwd: repoRoot })
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
+
+/** Update origin/<branch> even when clone used --single-branch (default fetch only updates the cloned ref). */
+export const fetchOriginBranch = async(
+  repoRoot: string,
+  branch: string,
+  hostKey: string
+): Promise<void> => {
+  const args = ['fetch', 'origin', `refs/heads/${branch}:refs/remotes/origin/${branch}`]
+  if (await isShallowRepository(repoRoot)) {
+    args.push('--depth', '1', '--force')
+  }
+  await runGit(args, { cwd: repoRoot, auth: { hostKey } })
 }
 
 const listChangedFiles = async(repoRoot: string) => {
@@ -80,14 +102,22 @@ export const fetchRemote = async(repoRoot: string): Promise<GitStatusResult> => 
   const hostKey = await hostKeyForRepo(repoRoot)
   if (!hostKey) throw new Error('not_a_repo')
 
-  await runGit(['fetch', 'origin'], { cwd: repoRoot, auth: { hostKey } })
+  const branch = await currentBranchOrNull(repoRoot)
+  if (branch) {
+    await fetchOriginBranch(repoRoot, branch, hostKey)
+  } else {
+    await runGit(['fetch', 'origin'], { cwd: repoRoot, auth: { hostKey } })
+  }
 
   return getStatus(repoRoot, Date.now())
 }
 
 export const getFileDiff = async(repoRoot: string, filePath: string): Promise<GitDiffResult> => {
-  const { unifiedDiff, additions, deletions } = await diffFile(repoRoot, filePath)
-  return { path: filePath, unifiedDiff, additions, deletions }
+  const { unifiedDiff, additions, deletions, oldContent, newContent } = await diffFile(
+    repoRoot,
+    filePath
+  )
+  return { path: filePath, unifiedDiff, additions, deletions, oldContent, newContent }
 }
 
 export const discardChanges = async(
@@ -145,6 +175,19 @@ const listConflictFiles = async(repoRoot: string): Promise<string[]> => {
   }
 }
 
+const isAncestorOfOrigin = async(repoRoot: string, branch: string): Promise<boolean> => {
+  try {
+    await runGit(['merge-base', '--is-ancestor', 'HEAD', `origin/${branch}`], { cwd: repoRoot })
+    return true
+  } catch {
+    return false
+  }
+}
+
+const mergeFastForwardOnly = async(repoRoot: string, branch: string): Promise<void> => {
+  await runGit(['merge', '--ff-only', `origin/${branch}`], { cwd: repoRoot })
+}
+
 export const pullLatest = async(repoRoot: string): Promise<GitPullResult> => {
   const hostKey = await hostKeyForRepo(repoRoot)
   if (!hostKey) throw new Error('not_a_repo')
@@ -152,12 +195,11 @@ export const pullLatest = async(repoRoot: string): Promise<GitPullResult> => {
   const branch = await currentBranchOrNull(repoRoot)
   if (!branch) throw new Error('not_a_repo')
 
-  try {
-    await runGit(['pull', '--ff-only', 'origin', branch], {
-      cwd: repoRoot,
-      auth: { hostKey }
-    })
+  await fetchOriginBranch(repoRoot, branch, hostKey)
 
+  let pullErr: unknown
+  try {
+    await mergeFastForwardOnly(repoRoot, branch)
     return {
       success: true,
       conflicts: false,
@@ -165,22 +207,61 @@ export const pullLatest = async(repoRoot: string): Promise<GitPullResult> => {
       fastForward: true
     }
   } catch (err) {
-    const conflictFiles = await listConflictFiles(repoRoot)
-    if (conflictFiles.length > 0) {
+    pullErr = err
+  }
+
+  if (await isShallowRepository(repoRoot)) {
+    try {
+      await runGit(['fetch', 'origin', branch, '--deepen=50'], { cwd: repoRoot, auth: { hostKey } })
+      await fetchOriginBranch(repoRoot, branch, hostKey)
+      await mergeFastForwardOnly(repoRoot, branch)
       return {
-        success: false,
-        conflicts: true,
-        conflictFiles,
-        fastForward: false
+        success: true,
+        conflicts: false,
+        conflictFiles: [],
+        fastForward: true
+      }
+    } catch (err) {
+      pullErr = err
+    }
+  }
+
+  const conflictFiles = await listConflictFiles(repoRoot)
+  if (conflictFiles.length > 0) {
+    return {
+      success: false,
+      conflicts: true,
+      conflictFiles,
+      fastForward: false
+    }
+  }
+
+  const changedFiles = await listChangedFiles(repoRoot)
+  const { ahead, behind } = await countAheadBehind(repoRoot, branch)
+
+  if (changedFiles.length === 0 && behind > 0) {
+    const canReset =
+      ahead === 0 ||
+      (await isShallowRepository(repoRoot)) ||
+      !(await isAncestorOfOrigin(repoRoot, branch))
+
+    if (canReset) {
+      try {
+        await runGit(['reset', '--hard', `origin/${branch}`], { cwd: repoRoot })
+        return {
+          success: true,
+          conflicts: false,
+          conflictFiles: [],
+          fastForward: true
+        }
+      } catch {
+        /* fall through to user error */
       }
     }
-
-    if (err instanceof GitCommandError) {
-      throw toUserError(err, 'ff_only_failed')
-    }
-
-    throw toUserError(err, 'ff_only_failed')
   }
+
+  rethrowUserError(pullErr, 'ff_only_failed')
+  throw new Error('pull failed')
 }
 
 export const ensureEmptyOrMissing = async(destinationPath: string): Promise<void> => {

@@ -23,4 +23,8 @@ describe('git errors', () => {
       'pull_conflicts'
     )
   })
+
+  it('preserves error code from GitUserError objects', () => {
+    expect(toUserError({ code: 'ff_only_failed', message: 'ignored' }).code).toBe('ff_only_failed')
+  })
 })

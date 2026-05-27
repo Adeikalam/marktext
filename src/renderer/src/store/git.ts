@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type {
+  GitBranch,
   GitChangedFile,
   GitDiffResult,
   GitStatusResult,
@@ -31,6 +32,8 @@ export const useGitStore = defineStore('git', () => {
   const showDiff = ref(false)
   const showCommitDialog = ref(false)
   const showCloneWizard = ref(false)
+  const branches = ref<GitBranch[]>([])
+  const isBranchPickerLoading = ref(false)
 
   let fetchTimerId: ReturnType<typeof setInterval> | null = null
   let statusUnsubscribe: (() => void) | null = null
@@ -165,6 +168,43 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
+  const loadBranches = async (): Promise<void> => {
+    if (!repoRoot.value) return
+    isBranchPickerLoading.value = true
+    try {
+      branches.value = await window.git.listBranches(repoRoot.value)
+    } catch (err) {
+      lastError.value = formatError(err)
+      branches.value = []
+    } finally {
+      isBranchPickerLoading.value = false
+    }
+  }
+
+  const switchBranch = async (branchName: string): Promise<boolean> => {
+    if (!repoRoot.value) return false
+    isLoading.value = true
+    conflictFiles.value = []
+    try {
+      const status = await window.git.switchBranch(repoRoot.value, branchName)
+      applyStatus(status)
+      if (
+        showDiff.value &&
+        diffResult.value &&
+        !status.changedFiles.some((file) => file.path === diffResult.value?.path)
+      ) {
+        closeDiff()
+      }
+      await fetchRemote().catch(() => {})
+      return true
+    } catch (err) {
+      lastError.value = formatError(err)
+      return false
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   const scheduleRefresh = (): void => {
     if (!isRepo.value) return
     if (refreshDebounce) clearTimeout(refreshDebounce)
@@ -238,6 +278,8 @@ export const useGitStore = defineStore('git', () => {
     showDiff,
     showCommitDialog,
     showCloneWizard,
+    branches,
+    isBranchPickerLoading,
     refresh,
     fetchRemote,
     pullLatest,
@@ -245,6 +287,8 @@ export const useGitStore = defineStore('git', () => {
     openDiff,
     closeDiff,
     discardChanges,
+    loadBranches,
+    switchBranch,
     scheduleRefresh,
     startPolling,
     stopPolling,
