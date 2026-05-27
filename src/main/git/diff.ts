@@ -1,8 +1,5 @@
-import { createTwoFilesPatch } from 'diff'
-import git from 'isomorphic-git'
-import fs from 'fs/promises'
 import path from 'path'
-import { gitFs } from './fs'
+import { GitCommandError, runGit } from './runner'
 
 export interface FileDiffResult {
   unifiedDiff: string
@@ -10,45 +7,41 @@ export interface FileDiffResult {
   deletions: number
 }
 
-export const diffFile = async (repoRoot: string, filePath: string): Promise<FileDiffResult> => {
-  const rel = filePath.replace(/\\/g, '/')
-  let oldContent = ''
-  let newContent = ''
+const nullDevice = process.platform === 'win32' ? 'NUL' : '/dev/null'
 
-  try {
-    const { blob } = await git.readBlob({
-      fs: gitFs,
-      dir: repoRoot,
-      oid: await git.resolveRef({ fs: gitFs, dir: repoRoot, ref: 'HEAD' }),
-      filepath: rel
-    })
-    oldContent = Buffer.from(blob).toString('utf8')
-  } catch {
-    oldContent = ''
-  }
-
-  try {
-    newContent = await fs.readFile(path.join(repoRoot, rel), 'utf8')
-  } catch {
-    newContent = ''
-  }
-
-  const unifiedDiff = createTwoFilesPatch(
-    `a/${rel}`,
-    `b/${rel}`,
-    oldContent,
-    newContent,
-    '',
-    '',
-    { context: 3 }
-  )
-
+const countDiffStats = (unifiedDiff: string): Pick<FileDiffResult, 'additions' | 'deletions'> => {
   let additions = 0
   let deletions = 0
+
   for (const line of unifiedDiff.split('\n')) {
     if (line.startsWith('+') && !line.startsWith('+++')) additions++
     if (line.startsWith('-') && !line.startsWith('---')) deletions++
   }
 
+  return { additions, deletions }
+}
+
+const runDiff = async(repoRoot: string, args: string[]): Promise<string> => {
+  try {
+    const { stdout } = await runGit(args, { cwd: repoRoot })
+    return stdout
+  } catch (err) {
+    if (err instanceof GitCommandError && err.exitCode === 1 && err.stdout) {
+      return err.stdout
+    }
+    throw err
+  }
+}
+
+export const diffFile = async(repoRoot: string, filePath: string): Promise<FileDiffResult> => {
+  const rel = filePath.replace(/\\/g, '/')
+  const absPath = path.join(repoRoot, rel)
+
+  let unifiedDiff = await runDiff(repoRoot, ['diff', 'HEAD', '--', rel])
+  if (!unifiedDiff.trim()) {
+    unifiedDiff = await runDiff(repoRoot, ['diff', '--no-index', '--', nullDevice, absPath])
+  }
+
+  const { additions, deletions } = countDiffStats(unifiedDiff)
   return { unifiedDiff, additions, deletions }
 }

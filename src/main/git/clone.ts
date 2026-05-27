@@ -1,41 +1,76 @@
-import git from 'isomorphic-git'
-import http from 'isomorphic-git/http/node'
 import type { GitCloneRequest, GitCloneResult, GitProgressEvent } from '@shared/types/git'
-import { gitFs } from './fs'
-import { createOnAuth, savePat } from './auth'
+import { isAuthenticated } from './auth'
 import { normalizeCloneUrl } from './parse'
+import { runGit } from './runner'
 import { ensureEmptyOrMissing } from './service'
 
-export const cloneRepository = async (
+const parseProgressLine = (line: string): Pick<GitProgressEvent, 'phase' | 'loaded' | 'total'> | null => {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+
+  const countMatch = trimmed.match(/\((\d+)\/(\d+)\)/)
+  const percentMatch = trimmed.match(/(\d+)%/)
+
+  return {
+    phase: trimmed,
+    loaded: countMatch ? Number.parseInt(countMatch[1] ?? '0', 10) : undefined,
+    total: countMatch
+      ? Number.parseInt(countMatch[2] ?? '0', 10)
+      : percentMatch
+        ? Number.parseInt(percentMatch[1] ?? '0', 10)
+        : undefined
+  }
+}
+
+export const cloneRepository = async(
   req: GitCloneRequest,
   onProgress?: (event: GitProgressEvent) => void
 ): Promise<GitCloneResult> => {
   const parsed = normalizeCloneUrl(req.url)
   await ensureEmptyOrMissing(req.destinationPath)
 
+  if (!(await isAuthenticated(parsed.hostKey))) {
+    throw new Error('auth_failed')
+  }
+
   const operationId = `clone-${Date.now()}`
+  let pendingLine = ''
 
-  await git.clone({
-    fs: gitFs,
-    http,
-    dir: req.destinationPath,
-    url: parsed.url,
-    depth: req.depth ?? 1,
-    singleBranch: true,
-    onAuth: createOnAuth(parsed.hostKey, req.pat),
-    onProgress: (progress) => {
-      onProgress?.({
-        operationId,
-        phase: progress.phase,
-        loaded: progress.loaded,
-        total: progress.total
-      })
+  await runGit(
+    [
+      'clone',
+      '--depth',
+      String(req.depth ?? 1),
+      '--single-branch',
+      '--progress',
+      parsed.url,
+      req.destinationPath
+    ],
+    {
+      auth: { hostKey: parsed.hostKey },
+      onStderr: (chunk) => {
+        pendingLine += chunk
+        const lines = pendingLine.split(/\r?\n/)
+        pendingLine = lines.pop() ?? ''
+
+        for (const line of lines) {
+          const progress = parseProgressLine(line)
+          if (progress) {
+            onProgress?.({
+              operationId,
+              phase: progress.phase,
+              loaded: progress.loaded,
+              total: progress.total
+            })
+          }
+        }
+      }
     }
+  )
+
+  const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD'], {
+    cwd: req.destinationPath
   })
-
-  // Persist PAT after a successful clone so keychain issues cannot block the connect flow.
-  await savePat(parsed.hostKey, req.pat)
-
-  const branch = (await git.currentBranch({ fs: gitFs, dir: req.destinationPath })) ?? null
-  return { repoRoot: req.destinationPath, branch }
+  const branch = stdout.trim()
+  return { repoRoot: req.destinationPath, branch: branch === 'HEAD' ? null : branch }
 }

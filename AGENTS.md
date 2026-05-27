@@ -28,7 +28,7 @@ Documentation-centric **Git integration** (Azure DevOps HTTPS + PAT) lets non-te
 | UI library | Element Plus |
 | Unit tests | Vitest 4 |
 | E2E tests | Playwright |
-| Git (bundled) | isomorphic-git + diff (main process only; no system `git` CLI) |
+| Git | system `git` CLI (main process only; Git 2.x+ on PATH, or `MARKTEXT_GIT`) |
 | Package manager | pnpm >=10 (`packageManager: pnpm@10.33.4`) |
 | Node.js minimum | >=20.19.0 (PR CI: Node 22.21.1 · release CI: Node 24.14.1) |
 
@@ -38,7 +38,7 @@ Documentation-centric **Git integration** (Azure DevOps HTTPS + PAT) lets non-te
 src/
   common/      Pure Node.js utilities — usable from main, preload, and renderer
   main/        Electron main process (IO, native dialogs, window management, auto-updater)
-    git/       Git service (isomorphic-git, PAT auth, clone/status/diff/commit/push/pull)
+    git/       Git service (system git CLI, PAT auth, clone/status/diff/commit/push/pull)
     ipc/       Sandbox IPC handlers including git.ts
   preload/     Electron preload scripts (bridge to the renderer; renderer runs sandboxed
                with contextIsolation: true, nodeIntegration: false, sandbox: true
@@ -178,7 +178,7 @@ See `docs/dev/IPC.md` for conventions and examples.
 
 ## Git integration
 
-Git runs entirely in the **main process** via [isomorphic-git](https://isomorphic-git.org/) with Node `fs`. Users do not need Git installed. The renderer talks to Git only through `window.git` (preload) and `mt::git::*` IPC channels defined in `src/shared/types/ipc.ts`.
+Git runs entirely in the **main process** by spawning the system **`git`** executable. Users must have Git installed (Git for Windows, Xcode CLT / Homebrew on macOS, or the `git` package on Linux). Override the binary with `MARKTEXT_GIT` for development. The renderer talks to Git only through `window.git` (preload) and `mt::git::*` IPC channels defined in `src/shared/types/ipc.ts`.
 
 ### Architecture
 
@@ -187,13 +187,13 @@ renderer (git Pinia store, sideBar/git.vue, CloneWizard, DiffView, CommitDialog)
     ↕ window.git  (src/preload/index.ts)
     ↕ mt::git::*  invoke + push events
 main (src/main/ipc/git.ts → src/main/git/*.ts)
-    ↕ isomorphic-git + Node fs
-    ↕ HTTPS (Azure DevOps) with PAT via onAuth
+    ↕ spawn git CLI (runner.ts)
+    ↕ HTTPS with Git credential.helper store
 ```
 
 **Repo root detection:** walk up from `projectTree.pathname` to find `.git`; Git state attaches to the repo root, not necessarily the opened folder.
 
-**Authentication:** Personal Access Token per host (e.g. `dev.azure.com/{org}`). Stored via `keytar` when the OS secret service is available; falls back to `{userData}/git-pats.json` (mode `0600`) on Linux without `org.freedesktop.secrets`.
+**Authentication:** Git credentials (username + password/PAT) stored via `git credential approve` in `{userData}/git-credentials` (mode `0600`), with a keytar/fallback copy per host. Network git commands use `credential.helper=store --file=…`. For Azure DevOps HTTPS, leave username empty and use a PAT as the password.
 
 **User-facing copy:** non-technical labels in `static/locales/en.json` under `sideBar.git.*` and `git.*` (e.g. “Share with team” instead of “push”).
 
@@ -202,7 +202,7 @@ main (src/main/ipc/git.ts → src/main/git/*.ts)
 | Area | Path |
 |------|------|
 | Shared types | `src/shared/types/git.ts` |
-| Main service | `src/main/git/{service,auth,clone,parse,diff,errors,fs}.ts` |
+| Main service | `src/main/git/{service,auth,clone,parse,diff,errors,runner,porcelain}.ts` |
 | IPC handlers | `src/main/ipc/git.ts` |
 | Preload API | `src/preload/index.ts` (`window.git`) |
 | Renderer store | `src/renderer/src/store/git.ts` |
@@ -213,7 +213,7 @@ main (src/main/ipc/git.ts → src/main/git/*.ts)
 
 ### IPC channels (summary)
 
-Invoke: `mt::git::detect-repo`, `status`, `fetch`, `diff`, `stage`, `commit`, `push`, `pull`, `publish`, `clone`, `save-pat`, `has-pat`, `normalize-url`, …
+Invoke: `mt::git::detect-repo`, `status`, `fetch`, `diff`, `stage`, `commit`, `push`, `pull`, `publish`, `clone`, `save-credentials`, `is-authenticated`, `disconnect`, `normalize-url`, …
 
 Push events: `mt::git::status-changed`, `mt::git::progress`
 

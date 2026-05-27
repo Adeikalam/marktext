@@ -61,6 +61,8 @@ On Red Hat-based Linux: `sudo dnf install libX11-devel libxkbfile-devel libsecre
 
 On Arch Linux: `sudo pacman -S libx11 libxkbfile libsecret fontconfig`
 
+**Git (Source Control features):** Git 2.x or newer must be installed and available on `PATH` (or set `MARKTEXT_GIT` to the full path of the executable). Linux: `sudo apt install git` / `sudo dnf install git` / `sudo pacman -S git`.
+
 **Additional development dependencies on Windows:**
 
 - Windows 10 SDK (only needed before Windows 10)

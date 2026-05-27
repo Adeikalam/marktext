@@ -56,6 +56,10 @@ export const hostKeyFromUrl = (url: string): string => {
   }
 }
 
+export const hostnameFromHostKey = (hostKey: string): string => {
+  return hostKey.split('/')[0] ?? hostKey
+}
+
 export const repoNameFromUrl = (url: string): string | null => {
   try {
     const parsed = new URL(url)
@@ -71,7 +75,7 @@ export const repoNameFromUrl = (url: string): string | null => {
   }
 }
 
-export const findRepoRoot = async (startPath: string): Promise<string | null> => {
+export const findRepoRoot = async(startPath: string): Promise<string | null> => {
   let current = pathe.normalize(startPath)
   const root = pathe.parse(current).root
 

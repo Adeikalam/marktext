@@ -187,8 +187,8 @@
     <main>
       <h1>MarkText Git Integration Plan</h1>
       <p class="overview">
-        Add Azure DevOps–focused Git integration to MarkText via a main-process Git service built on
-        <strong>isomorphic-git</strong> (bundled with the app — users do not install Git locally),
+        Add Azure DevOps–focused Git integration to MarkText via a main-process Git service that spawns the system
+        <strong>git</strong> CLI (Git 2.x+ on PATH, or <code>MARKTEXT_GIT</code> override),
         a simplified Source sidebar panel, PAT auth stored in OS keychain, automatic background fetch with clear sync status,
         diff review, and one-click commit/push/pull flows aimed at non-technical documentation writers.
       </p>
@@ -197,7 +197,7 @@
         <h2>Implementation todos</h2>
         <ol>
           <li><span class="badge badge-pending">pending</span> <strong>foundation-ipc</strong> — Add shared git types, <code>mt::git::*</code> IPC channels, preload <code>window.git</code> API, register handlers in main/ipc</li>
-          <li><span class="badge badge-pending">pending</span> <strong>git-service</strong> — Implement main/git service (isomorphic-git, Node <code>fs</code> adapter, PAT via keytar, Azure DevOps URL parse, error mapping)</li>
+          <li><span class="badge badge-pending">pending</span> <strong>git-service</strong> — Implement main/git service (system <code>git</code> CLI via <code>runner.ts</code>, PAT via keytar, Azure DevOps URL parse, error mapping)</li>
           <li><span class="badge badge-pending">pending</span> <strong>git-store</strong> — Create renderer git Pinia store with auto-fetch polling, project hooks, status-changed listener</li>
           <li><span class="badge badge-pending">pending</span> <strong>sidebar-ui</strong> — Add Git sidebar panel with sync banner, changed-files list, non-technical copy/i18n</li>
           <li><span class="badge badge-pending">pending</span> <strong>clone-wizard</strong> — Build Connect/Clone wizard (URL + PAT + destination) wired to clone IPC and OPEN_PROJECT</li>
@@ -260,7 +260,7 @@ flowchart TB
     GitAuth["git/auth.ts - PAT via keytar"]
     GitIPC --> GitService
     GitService --> GitAuth
-    GitService -->|"isomorphic-git API"| IsoGit["isomorphic-git (bundled)"]
+    GitService -->|"spawn git CLI"| GitCLI["system git (PATH)"]
   end
 
   GitStore -->|"invoke + events"| GitAPI
@@ -269,14 +269,15 @@ flowchart TB
       </div>
 
       <p>
-        <strong>Why <a href="https://isomorphic-git.org/">isomorphic-git</a> (not system <code>git</code>):</strong>
-        Non-technical users cannot be expected to install Git. isomorphic-git is pure JavaScript, ships inside MarkText,
-        and runs in the <strong>main process</strong> with Node’s <code>fs</code> — same IPC boundary as today
-        (<code>src/main/ipc/ripgrep.ts</code>, <code>src/main/ipc/uploader.ts</code>), but no external binary.
+        <strong>Why system <code>git</code> (not <a href="https://isomorphic-git.org/">isomorphic-git</a>):</strong>
+        Native Git is faster on large repos, supports the full porcelain/plumbing surface MarkText needs
+        (<code>status --porcelain</code>, <code>pull --ff-only</code>, <code>rev-list</code>), and avoids bundling a large JS Git implementation.
+        Users install Git once (Git for Windows, Xcode CLT / Homebrew, or Linux packages) — same model as optional Pandoc.
+        Override the binary with <code>MARKTEXT_GIT</code> for development.
       </p>
       <p>
-        <strong>Trade-offs to accept:</strong> slower on very large repos than native Git; some advanced Git features unavailable in v1;
-        Azure DevOps HTTPS + PAT must be validated early via <code>onAuth</code> callbacks. Bundle size increases (~hundreds of KB minified).
+        <strong>Trade-offs to accept:</strong> Git must be installed and on PATH; show a clear <code>git_not_found</code> error when missing;
+        Azure DevOps HTTPS + PAT injected via <code>http.extraHeader</code> on each network command.
       </p>
       <p>
         <strong>Repo root detection:</strong> When a folder is opened, walk up from <code>projectTree.pathname</code> to find <code>.git</code>
@@ -336,27 +337,28 @@ interface GitCloneRequest {
       <h2 id="layer2">Layer 2 — Main-process Git service</h2>
       <h3>File layout</h3>
       <pre><code>src/main/git/
-  fs.ts           # Node fs adapter passed to every isomorphic-git call
-  service.ts      # Core operations (statusMatrix, commit, push, pull, fetch)
-  auth.ts         # onAuth + PAT from keytar (never exposed to renderer)
-  clone.ts        # Clone wizard backend (git.clone + onProgress)
-  diff.ts         # Build unified diffs from blobs / working tree (not CLI)
-  parse.ts        # Azure DevOps URL normalization, ahead/behind helpers
-  errors.ts       # Map isomorphic-git errors → user-facing codes
+  runner.ts       # Resolve git binary, spawn CLI, PAT config args
+  service.ts      # Core operations (status, commit, push, pull, fetch)
+  auth.ts         # PAT from keytar + http.extraHeader auth args
+  clone.ts        # Clone wizard backend (git clone --progress)
+  diff.ts         # Unified diffs via git diff
+  porcelain.ts    # Parse git status --porcelain=v1 -z
+  parse.ts        # Azure DevOps URL normalization, repo root walk
+  errors.ts       # Map git CLI errors → user-facing codes
 src/main/ipc/git.ts</code></pre>
 
-      <h3>isomorphic-git setup (main process only)</h3>
+      <h3>System git setup (main process only)</h3>
       <ul>
-        <li>Add dependency: <code>isomorphic-git</code> (and <code>diff</code> or similar if needed for unified patch text)</li>
-        <li>Always use Node <code>fs</code> from <code>node:fs/promises</code> — <strong>never</strong> run isomorphic-git in the renderer (sandbox + bundle size)</li>
-        <li>Configure <code>electron-vite</code> if needed so isomorphic-git resolves cleanly in the main bundle (pure JS; no <code>electron-rebuild</code>)</li>
-        <li>No <code>mt::git::exists</code> channel — Git is always available once the app is installed</li>
+        <li>Require Git 2.x+ on PATH (or <code>MARKTEXT_GIT</code> override, same pattern as <code>MARKTEXT_PANDOC</code>)</li>
+        <li>Spawn <code>git</code> via <code>child_process.spawn</code> — <strong>never</strong> run git in the renderer</li>
+        <li>Set <code>GIT_TERMINAL_PROMPT=0</code> on every invocation to prevent interactive prompts</li>
+        <li>Surface <code>git_not_found</code> when the executable is missing</li>
       </ul>
 
       <h3>PAT authentication (<code>auth.ts</code>)</h3>
       <ul>
         <li><strong>Storage:</strong> Extend <code>DataCenter.encryptKeys</code> with keys like <code>git-pat-{hostKey}</code> where <code>hostKey</code> = normalized host + org (e.g. <code>dev.azure.com/contoso</code>)</li>
-        <li><strong>Usage:</strong> Pass <code>onAuth</code> to every network operation (<code>clone</code>, <code>fetch</code>, <code>push</code>, <code>pull</code>). For Azure DevOps HTTPS PAT: return <code>{ username: '', password: pat }</code> (empty username + token as password is the standard pattern)</li>
+        <li><strong>Usage:</strong> Inject PAT on network operations via <code>-c http.extraHeader=Authorization: Basic …</code> (empty username + token). Applied in <code>runner.ts</code> for <code>clone</code>, <code>fetch</code>, <code>push</code>, <code>pull</code>.</li>
         <li><strong>Never</strong> log PAT; never send PAT to renderer except masked indicator (“Connected as …”)</li>
         <li><strong>Never</strong> persist PAT inside <code>.git/config</code> or remote URLs in the repo</li>
         <li><strong>PAT scope guidance</strong> in UI: Code (Read &amp; Write) for clone/push; link to Azure DevOps PAT docs</li>
@@ -371,16 +373,16 @@ src/main/ipc/git.ts</code></pre>
       </ul>
       <p>Validate HTTPS only in v1; reject SSH (<code>git@...</code>) with friendly message.</p>
 
-      <h3>Core operations (isomorphic-git APIs)</h3>
+      <h3>Core operations (git CLI)</h3>
       <ul>
-        <li><strong>Status:</strong> <code>statusMatrix({ fs, dir, filter })</code> → map to <code>GitChangedFile[]</code>; branch via <code>currentBranch</code> / <code>listBranches</code></li>
-        <li><strong>Ahead / behind:</strong> <code>fetch</code> then compare <code>HEAD</code> to <code>remoteRef</code> (e.g. <code>refs/remotes/origin/&lt;branch&gt;</code>) using <code>log</code> or commit walk helpers in <code>parse.ts</code></li>
-        <li><strong>Auto-fetch:</strong> Renderer schedules periodic <code>mt::git::fetch</code> (default <strong>every 3 minutes</strong> when Git panel visible; <strong>every 5 minutes</strong> when hidden). Main calls <code>git.fetch({ fs, dir, onAuth })</code>, then emits <code>mt::git::status-changed</code>.</li>
-        <li><strong>Diff:</strong> <code>diff.ts</code> — read blob at <code>HEAD</code> via <code>readBlob</code>, read working tree via <code>fs</code>, produce unified diff string for CodeMirror (isomorphic-git has no single “porcelain diff” command)</li>
-        <li><strong>Stage / commit:</strong> <code>add</code> per path (or all changed) then <code>commit</code> with message + author from preferences (name/email required for commits)</li>
-        <li><strong>Push:</strong> <code>push({ fs, dir, remote, ref, onAuth, onProgress })</code></li>
-        <li><strong>Pull (ff-only):</strong> <code>fetch</code> then fast-forward <code>checkout</code> / merge only if ancestor check passes; otherwise return <code>conflicts: true</code> + paths from <code>statusMatrix</code> conflict entries; show guidance banner</li>
-        <li><strong>Clone:</strong> <code>clone({ fs, dir, url, onAuth, onProgress, depth: 1 })</code> optional shallow clone for large doc repos</li>
+        <li><strong>Status:</strong> <code>git status --porcelain=v1 -z</code> → parse in <code>porcelain.ts</code>; branch via <code>git rev-parse --abbrev-ref HEAD</code></li>
+        <li><strong>Ahead / behind:</strong> <code>git rev-list --left-right --count HEAD...origin/&lt;branch&gt;</code> after fetch</li>
+        <li><strong>Auto-fetch:</strong> Renderer schedules periodic <code>mt::git::fetch</code> (default <strong>every 3 minutes</strong> when Git panel visible; <strong>every 5 minutes</strong> when hidden). Main runs <code>git fetch origin</code>, then emits <code>mt::git::status-changed</code>.</li>
+        <li><strong>Diff:</strong> <code>git diff HEAD -- &lt;path&gt;</code> (untracked: <code>git diff --no-index /dev/null &lt;path&gt;</code>)</li>
+        <li><strong>Stage / commit:</strong> <code>git add</code> then <code>git commit -m … --author "Name &lt;email&gt;"</code></li>
+        <li><strong>Push:</strong> <code>git push origin &lt;branch&gt;</code></li>
+        <li><strong>Pull (ff-only):</strong> <code>git pull --ff-only origin &lt;branch&gt;</code>; conflicts via <code>git diff --name-only --diff-filter=U</code></li>
+        <li><strong>Clone:</strong> <code>git clone --depth 1 --single-branch --progress &lt;url&gt; &lt;dest&gt;</code></li>
       </ul>
 
       <h3>Hide <code>.git</code> from file tree</h3>
@@ -478,7 +480,7 @@ src/main/ipc/git.ts</code></pre>
       <ul>
         <li>Auto-check for team changes (on/off)</li>
         <li>Check interval (3 / 5 / 10 min)</li>
-        <li>Commit author name / email (required by isomorphic-git for commits)</li>
+        <li>Commit author name / email (required for <code>git commit --author</code>)</li>
         <li>“Connected accounts” list with disconnect</li>
       </ul>
 
@@ -544,17 +546,17 @@ src/main/ipc/git.ts</code></pre>
       <p><strong>Unit tests</strong> (<code>test/unit/specs/</code>):</p>
       <ul>
         <li><code>git-parse.spec.ts</code> — Azure DevOps URL normalization</li>
-        <li><code>git-status.spec.ts</code> — <code>statusMatrix</code> → <code>GitChangedFile[]</code> mapping</li>
-        <li><code>git-errors.spec.ts</code> — isomorphic-git / HTTP errors → error codes</li>
-        <li><code>git-diff.spec.ts</code> — unified diff generation from blobs + working tree</li>
+        <li><code>git-porcelain.spec.ts</code> — <code>status --porcelain</code> → <code>GitChangedFile[]</code> mapping</li>
+        <li><code>git-errors.spec.ts</code> — git CLI / HTTP errors → error codes</li>
+        <li><code>git-diff.spec.ts</code> — unified diff via <code>git diff</code></li>
       </ul>
-      <p><strong>Integration tests:</strong> use isomorphic-git in temp dirs end-to-end (init → add → commit → push to local bare repo). CI does not require system Git; optional: use system Git only in test fixtures to create bare repos if simpler.</p>
+      <p><strong>Integration tests:</strong> use system git in temp dirs end-to-end (init → add → commit → push to local bare repo). CI runners include Git preinstalled.</p>
       <p><strong>E2E:</strong> scripted local remote; verify sync banner when <code>behind &gt; 0</code>.</p>
       <p><strong>Manual QA (Azure DevOps):</strong> clone private repo; edit → diff → share; two clients push/pull; simultaneous edit conflict message.</p>
 
       <h2 id="security">Security checklist</h2>
       <ul>
-        <li>PAT only in main process + OS keychain (supplied via <code>onAuth</code> only)</li>
+        <li>PAT only in main process + OS keychain (injected via <code>http.extraHeader</code> on spawn)</li>
         <li>Clear PAT when user disconnects account</li>
         <li>Do not write PAT to <code>.git/config</code> in plain text</li>
         <li>Validate clone destination (no path traversal via repo name)</li>
@@ -581,7 +583,7 @@ src/main/ipc/git.ts</code></pre>
         <li><code>src/renderer/src/components/sideBar/{help.ts,index.vue}</code></li>
         <li><code>src/renderer/src/pages/app.vue</code></li>
         <li><code>src/main/menu/templates/file.ts</code></li>
-        <li><code>package.json</code> — add <code>isomorphic-git</code> (and <code>diff</code> if used for patch text)</li>
+        <li><code>package.json</code> — remove <code>isomorphic-git</code>; Git is a system dependency</li>
       </ul>
 
       <h2 id="risks">Risk notes</h2>
@@ -593,8 +595,8 @@ src/main/ipc/git.ts</code></pre>
           <tr><td>ff-only pull fails often</td><td>Expected for concurrent edits; conflict UX is differentiator</td></tr>
           <tr><td>WYSIWYG vs on-disk content</td><td>Save-before-commit (save-all if dirty tabs)</td></tr>
           <tr><td>Linux keytar</td><td>Already used; test on AppImage/snap (libsecret)</td></tr>
-          <tr><td>isomorphic-git limitations</td><td>Document v1 limits; ff-only pull; test Azure DevOps early; shallow clone for huge repos</td></tr>
-          <tr><td>Main bundle size</td><td>Monitor packaged app size; tree-shake isomorphic-git imports where possible</td></tr>
+          <tr><td>Git not installed</td><td>Detect on first use; show <code>git_not_found</code> with install guidance</td></tr>
+          <tr><td>Git version too old</td><td>Document Git 2.x minimum; test porcelain and ff-only pull</td></tr>
         </tbody>
       </table>
 

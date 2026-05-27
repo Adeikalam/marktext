@@ -29,14 +29,24 @@
       class="empty-state"
     >
       <p>{{ t('sideBar.git.noFolderOpen') }}</p>
-      <el-button
-        type="primary"
-        text
-        bg
-        @click="openFolder"
-      >
-        {{ t('sideBar.git.openFolder') }}
-      </el-button>
+      <div class="empty-state-actions">
+        <el-button
+          type="primary"
+          text
+          bg
+          @click="openFolder"
+        >
+          {{ t('sideBar.git.openExistingFolder') }}
+        </el-button>
+        <el-button
+          type="primary"
+          text
+          bg
+          @click="gitStore.showCloneWizard = true"
+        >
+          {{ t('sideBar.git.cloneProject') }}
+        </el-button>
+      </div>
     </div>
 
     <div
@@ -80,9 +90,28 @@
         </ul>
       </div>
 
-      <h6 class="section-title">
-        {{ changesTitle }}
-      </h6>
+      <div class="section-header">
+        <h6 class="section-title">
+          {{ changesTitle }}
+        </h6>
+        <el-tooltip
+          :content="t('sideBar.git.refresh')"
+          placement="top"
+          :show-after="500"
+        >
+          <el-button
+            class="refresh-btn"
+            size="small"
+            text
+            :loading="gitStore.isLoading"
+            @click="refreshChanges"
+          >
+            <el-icon :size="14">
+              <RefreshRight />
+            </el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
 
       <ul
         v-if="gitStore.changedFiles.length"
@@ -93,6 +122,22 @@
           :key="file.path"
           class="file-row"
         >
+          <el-tooltip
+            :content="t('sideBar.git.discardChange')"
+            placement="top"
+            :show-after="500"
+          >
+            <button
+              type="button"
+              class="discard-btn"
+              :disabled="gitStore.isLoading"
+              @click.stop="discardFile(file)"
+            >
+              <el-icon :size="14">
+                <Delete />
+              </el-icon>
+            </button>
+          </el-tooltip>
           <button
             type="button"
             class="file-open"
@@ -103,7 +148,6 @@
               :class="file.kind"
             />
             <span class="name">{{ file.path }}</span>
-            <span class="label">{{ changeLabel(file) }}</span>
           </button>
           <button
             type="button"
@@ -155,6 +199,7 @@ import { useProjectStore } from '@/store/project'
 import { useLayoutStore } from '@/store/layout'
 import type { GitChangedFile } from '@shared/types/git'
 import { t } from '@/i18n'
+import { RefreshRight, Delete } from '@element-plus/icons-vue'
 import Loading from '@/components/loading/index.vue'
 
 const gitStore = useGitStore()
@@ -192,18 +237,8 @@ const syncBanner = computed(() => {
       showPull: false
     }
   }
-  return {
-    type: 'ok',
-    message: t('sideBar.git.upToDate'),
-    showPull: false
-  }
+  return null
 })
-
-const changeLabel = (file: GitChangedFile): string => {
-  if (file.kind === 'added') return t('sideBar.git.changeAdded')
-  if (file.kind === 'deleted') return t('sideBar.git.changeDeleted')
-  return t('sideBar.git.changeModified')
-}
 
 const openFolder = (): void => {
   projectStore.ASK_FOR_OPEN_PROJECT()
@@ -219,6 +254,14 @@ const openFile = (relPath: string): void => {
 const reviewFirst = (): void => {
   const first = gitStore.changedFiles[0]
   if (first) gitStore.openDiff(first.path)
+}
+
+const refreshChanges = (): void => {
+  gitStore.refresh(undefined, { fetch: true }).catch(() => {})
+}
+
+const discardFile = (file: GitChangedFile): void => {
+  gitStore.discardChanges(file.path, file.kind).catch(() => {})
 }
 
 watch(rightColumn, (column) => {
@@ -244,7 +287,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 12px;
+  padding: 37px 12px 12px;
   box-sizing: border-box;
   position: relative;
 }
@@ -262,10 +305,6 @@ onUnmounted(() => {
   background: rgba(56, 139, 253, 0.12);
   border: 1px solid rgba(56, 139, 253, 0.3);
 }
-.sync-banner.ok {
-  background: rgba(63, 185, 80, 0.12);
-  border: 1px solid rgba(63, 185, 80, 0.3);
-}
 .sync-banner p {
   margin: 0 0 8px;
 }
@@ -281,12 +320,30 @@ onUnmounted(() => {
   text-align: center;
   margin-top: 24px;
 }
+.empty-state-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .section-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--editorColor50);
-  margin: 0 0 8px;
+  margin: 0;
+  flex: 1;
+}
+.refresh-btn {
+  flex-shrink: 0;
+  padding: 4px;
 }
 .file-list {
   list-style: none;
@@ -339,10 +396,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.label {
-  color: var(--editorColor50);
-  font-size: 11px;
-}
 .review-btn {
   background: none;
   border: none;
@@ -350,6 +403,26 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 11px;
   padding: 4px;
+}
+.discard-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--editorColor50);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.discard-btn:hover:not(:disabled) {
+  color: #f85149;
+  background: var(--itemHoverBgColor);
+}
+.discard-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 .actions {
   display: flex;

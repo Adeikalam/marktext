@@ -47,7 +47,10 @@ export const useGitStore = defineStore('git', () => {
     }
   }
 
-  const refresh = async (startPath?: string): Promise<void> => {
+  const refresh = async(
+    startPath?: string,
+    options?: { silent?: boolean; fetch?: boolean }
+  ): Promise<void> => {
     const projectStore = useProjectStore()
     const path = startPath ?? projectStore.projectTree?.pathname
     if (!path) {
@@ -56,16 +59,24 @@ export const useGitStore = defineStore('git', () => {
       return
     }
 
-    isLoading.value = true
+    if (!options?.silent) {
+      isLoading.value = true
+    }
     try {
       const status = await window.git.status(path)
       applyStatus(status)
+      if (options?.fetch && status.repoRoot) {
+        const fetched = await window.git.fetch(status.repoRoot)
+        applyStatus(fetched)
+      }
     } catch (err) {
       const message = formatError(err)
       lastError.value = message
       log.error('[git store] refresh failed:', err)
     } finally {
-      isLoading.value = false
+      if (!options?.silent) {
+        isLoading.value = false
+      }
     }
   }
 
@@ -138,10 +149,27 @@ export const useGitStore = defineStore('git', () => {
     diffResult.value = null
   }
 
+  const discardChanges = async(filePath: string, kind: GitChangedFile['kind']): Promise<void> => {
+    if (!repoRoot.value) return
+    isLoading.value = true
+    try {
+      const status = await window.git.discard(repoRoot.value, filePath, kind)
+      applyStatus(status)
+      if (showDiff.value && diffResult.value?.path === filePath) {
+        closeDiff()
+      }
+    } catch (err) {
+      lastError.value = formatError(err)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   const scheduleRefresh = (): void => {
+    if (!isRepo.value) return
     if (refreshDebounce) clearTimeout(refreshDebounce)
     refreshDebounce = setTimeout(() => {
-      refresh().catch(() => {})
+      refresh(undefined, { silent: true }).catch(() => {})
     }, 300)
   }
 
@@ -181,6 +209,9 @@ export const useGitStore = defineStore('git', () => {
     statusUnsubscribe = window.git.onStatusChanged((status) => {
       applyStatus(status as GitStatusResult)
     })
+
+    window.electron.ipcRenderer.on('mt::tab-saved', scheduleRefresh)
+    window.electron.ipcRenderer.on('mt::set-pathname', scheduleRefresh)
   }
 
   const watchProject = (): void => {
@@ -213,6 +244,7 @@ export const useGitStore = defineStore('git', () => {
     publish,
     openDiff,
     closeDiff,
+    discardChanges,
     scheduleRefresh,
     startPolling,
     stopPolling,

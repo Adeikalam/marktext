@@ -28,10 +28,14 @@ export interface GitDiffResult {
   deletions: number
 }
 
+export interface GitCredentials {
+  username: string
+  password: string
+}
+
 export interface GitCloneRequest {
   url: string
   destinationPath: string
-  pat: string
   depth?: number
 }
 
@@ -74,6 +78,7 @@ export type GitErrorCode =
   | 'ff_only_failed'
   | 'invalid_url'
   | 'path_exists'
+  | 'git_not_found'
   | 'unknown'
 
 export interface GitUserError {

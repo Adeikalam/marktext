@@ -13,7 +13,7 @@
       class="clone-steps"
     >
       <el-step :title="t('git.clone.stepUrl')" />
-      <el-step :title="t('git.clone.stepToken')" />
+      <el-step :title="t('git.clone.stepCredentials')" />
       <el-step :title="t('git.clone.stepFolder')" />
     </el-steps>
 
@@ -35,14 +35,26 @@
       class="step-body"
     >
       <p class="hint">
-        {{ t('git.clone.tokenHint') }}
+        {{ t('git.clone.credentialsHint') }}
       </p>
       <el-input
-        v-model="pat"
+        v-model="username"
+        class="field"
+        :placeholder="t('git.clone.usernamePlaceholder')"
+      />
+      <el-input
+        v-model="password"
+        class="field"
         type="password"
         show-password
-        :placeholder="t('git.clone.tokenPlaceholder')"
+        :placeholder="t('git.clone.passwordPlaceholder')"
       />
+      <p
+        v-if="hasSavedCredentials"
+        class="saved-credentials"
+      >
+        {{ t('git.clone.credentialsSaved') }}
+      </p>
     </div>
 
     <div
@@ -82,6 +94,7 @@
         v-if="step < 2"
         type="primary"
         :disabled="!canAdvance"
+        :loading="isSavingCredentials"
         @click="advance"
       >
         {{ t('git.clone.next') }}
@@ -109,12 +122,15 @@ const gitStore = useGitStore()
 
 const step = ref(0)
 const url = ref('')
-const pat = ref('')
+const username = ref('')
+const password = ref('')
 const destinationPath = ref('')
 const hostKey = ref('')
 const normalizedUrl = ref('')
 const errorMessage = ref<string | null>(null)
 const isCloning = ref(false)
+const isSavingCredentials = ref(false)
+const hasSavedCredentials = ref(false)
 const progressText = ref('')
 
 const visible = computed({
@@ -126,7 +142,7 @@ const visible = computed({
 
 const canAdvance = computed(() => {
   if (step.value === 0) return url.value.trim().length > 0
-  if (step.value === 1) return pat.value.trim().length > 0
+  if (step.value === 1) return password.value.trim().length > 0 || hasSavedCredentials.value
   return true
 })
 
@@ -135,11 +151,16 @@ let progressUnsubscribe: (() => void) | null = null
 const reset = (): void => {
   step.value = 0
   url.value = ''
-  pat.value = ''
+  username.value = ''
+  password.value = ''
   destinationPath.value = ''
+  hostKey.value = ''
+  normalizedUrl.value = ''
   errorMessage.value = null
   progressText.value = ''
   isCloning.value = false
+  isSavingCredentials.value = false
+  hasSavedCredentials.value = false
 }
 
 const advance = async (): Promise<void> => {
@@ -153,12 +174,36 @@ const advance = async (): Promise<void> => {
         const home = await guessDocumentsPath()
         destinationPath.value = window.path.join(home, 'MarkText', parsed.repoName)
       }
+      hasSavedCredentials.value = await window.git.isAuthenticated(parsed.hostKey)
       step.value++
     } catch (err) {
       errorMessage.value = formatError(err)
     }
     return
   }
+
+  if (step.value === 1) {
+    if (password.value.trim()) {
+      isSavingCredentials.value = true
+      try {
+        await window.git.saveCredentials(hostKey.value, {
+          username: username.value.trim(),
+          password: password.value.trim()
+        })
+        hasSavedCredentials.value = true
+        password.value = ''
+      } catch (err) {
+        errorMessage.value = formatError(err)
+        log.error('[clone wizard] credentials', err)
+        return
+      } finally {
+        isSavingCredentials.value = false
+      }
+    } else if (!hasSavedCredentials.value) {
+      return
+    }
+  }
+
   step.value++
 }
 
@@ -183,7 +228,6 @@ const clone = async (): Promise<void> => {
     const result = await window.git.clone({
       url: normalizedUrl.value || url.value.trim(),
       destinationPath: destinationPath.value.trim(),
-      pat: pat.value.trim(),
       depth: 1
     })
 
@@ -232,10 +276,18 @@ onUnmounted(() => {
 .step-body {
   min-height: 120px;
 }
+.field {
+  margin-bottom: 12px;
+}
 .hint {
   color: var(--editorColor50);
   font-size: 13px;
   margin-bottom: 12px;
+}
+.saved-credentials {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--themeColor);
 }
 .error {
   color: var(--deleteColor);

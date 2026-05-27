@@ -170,6 +170,11 @@ declare global {
     status(startPath: string): Promise<import('@shared/types/git').GitStatusResult>
     fetch(repoRoot: string): Promise<import('@shared/types/git').GitStatusResult>
     diff(repoRoot: string, filePath: string): Promise<import('@shared/types/git').GitDiffResult>
+    discard(
+      repoRoot: string,
+      filePath: string,
+      kind: import('@shared/types/git').GitFileChangeKind
+    ): Promise<import('@shared/types/git').GitStatusResult>
     stage(repoRoot: string, paths?: string[]): Promise<void>
     commit(req: import('@shared/types/git').GitCommitRequest): Promise<import('@shared/types/git').GitCommitResult>
     push(repoRoot: string): Promise<import('@shared/types/git').GitStatusResult>
@@ -182,9 +187,12 @@ declare global {
       author: { name: string; email: string }
     }): Promise<import('@shared/types/git').GitStatusResult>
     clone(req: import('@shared/types/git').GitCloneRequest): Promise<import('@shared/types/git').GitCloneResult>
-    savePat(hostKey: string, pat: string): Promise<void>
-    deletePat(hostKey: string): Promise<void>
-    hasPat(hostKey: string): Promise<boolean>
+    saveCredentials(
+      hostKey: string,
+      credentials: import('@shared/types/git').GitCredentials
+    ): Promise<void>
+    disconnect(hostKey: string): Promise<void>
+    isAuthenticated(hostKey: string): Promise<boolean>
     hostKeyFromUrl(url: string): Promise<string>
     hostKeyForRepo(repoRoot: string): Promise<string | null>
     normalizeUrl(

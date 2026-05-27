@@ -37,7 +37,9 @@ import type {
   GitCloneResult,
   GitCommitRequest,
   GitCommitResult,
+  GitCredentials,
   GitDiffResult,
+  GitFileChangeKind,
   GitProgressEvent,
   GitPullResult,
   GitStatusResult
@@ -56,13 +58,21 @@ export interface IpcInvokeChannels {
   'mt::fonts::list': { args: []; ret: string[] }
   'mt::git::clone': { args: [req: GitCloneRequest]; ret: GitCloneResult }
   'mt::git::commit': { args: [req: GitCommitRequest]; ret: GitCommitResult }
-  'mt::git::delete-pat': { args: [hostKey: string]; ret: void }
   'mt::git::detect-repo': { args: [startPath: string]; ret: string | null }
+  'mt::git::discard': {
+    args: [repoRoot: string, filePath: string, kind: GitFileChangeKind]
+    ret: GitStatusResult
+  }
+  'mt::git::disconnect': { args: [hostKey: string]; ret: void }
   'mt::git::diff': { args: [repoRoot: string, filePath: string]; ret: GitDiffResult }
   'mt::git::fetch': { args: [repoRoot: string]; ret: GitStatusResult }
-  'mt::git::has-pat': { args: [hostKey: string]; ret: boolean }
   'mt::git::host-key-for-repo': { args: [repoRoot: string]; ret: string | null }
   'mt::git::host-key-from-url': { args: [url: string]; ret: string }
+  'mt::git::is-authenticated': { args: [hostKey: string]; ret: boolean }
+  'mt::git::save-credentials': {
+    args: [hostKey: string, credentials: GitCredentials]
+    ret: void
+  }
   'mt::git::normalize-url': {
     args: [url: string]
     ret: { url: string; hostKey: string; repoName: string | null }
@@ -76,7 +86,6 @@ export interface IpcInvokeChannels {
     ret: GitPullResult & { status: GitStatusResult }
   }
   'mt::git::push': { args: [repoRoot: string]; ret: GitStatusResult }
-  'mt::git::save-pat': { args: [hostKey: string, pat: string]; ret: void }
   'mt::git::stage': { args: [repoRoot: string, paths?: string[]]; ret: void }
   'mt::git::status': { args: [startPath: string]; ret: GitStatusResult }
   'mt::fs-trash-item': { args: [pathname: string]; ret: void }
