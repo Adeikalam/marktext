@@ -749,16 +749,23 @@ class App {
     ipcMain.on(
       'app-open-directory-by-id',
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (windowId: any, pathname: any, openInSameWindow: any) => {
+      (first: any, second: any, third: any, fourth?: any) => {
+        // ipcRenderer.send passes (event, windowId, pathname, openInSameWindow);
+        // ipcMain.emit passes (windowId, pathname, openInSameWindow).
+        const fromRenderer = first && typeof first === 'object' && 'sender' in first
+        const windowId = fromRenderer ? (second as number) : (first as number)
+        const pathname = fromRenderer ? (third as string) : (second as string)
+        const openInSameWindow = fromRenderer ? fourth : third
+
         const { openFolderInNewWindow } = this._accessor.preferences.getAll()
         if (openInSameWindow || !openFolderInNewWindow) {
-          const editor = this._windowManager.get(windowId as number)
+          const editor = this._windowManager.get(windowId)
           if (editor) {
-            editor.openFolder(pathname as string)
+            editor.openFolder(pathname)
             return
           }
         }
-        this._createEditorWindow(pathname as string)
+        this._createEditorWindow(pathname)
       }
     )
 

@@ -2,7 +2,8 @@ import {
   Folder as FilesIcon,
   Search as SearchIcon,
   Memo as TocIcon,
-  Setting as SettingIcon
+  Setting as SettingIcon,
+  Share as GitIcon
 } from '@element-plus/icons-vue'
 import { t } from '@/i18n'
 
@@ -27,6 +28,11 @@ export const sideBarIcons: SideBarIconEntry[] = [
     id: 'toc',
     name: () => t('sideBar.icons.toc'),
     icon: TocIcon
+  },
+  {
+    id: 'git',
+    name: () => t('sideBar.icons.git'),
+    icon: GitIcon
   }
 ]
 

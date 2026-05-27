@@ -226,6 +226,37 @@ const fontsAPI = {
   list: () => invoke('mt::fonts::list')
 }
 
+type GitHandler<T = unknown> = (payload: T) => void
+
+const gitAPI = {
+  detectRepo: (startPath: string) => invoke('mt::git::detect-repo', startPath),
+  status: (startPath: string) => invoke('mt::git::status', startPath),
+  fetch: (repoRoot: string) => invoke('mt::git::fetch', repoRoot),
+  diff: (repoRoot: string, filePath: string) => invoke('mt::git::diff', repoRoot, filePath),
+  stage: (repoRoot: string, paths?: string[]) => invoke('mt::git::stage', repoRoot, paths),
+  commit: (req: unknown) => invoke('mt::git::commit', req as never),
+  push: (repoRoot: string) => invoke('mt::git::push', repoRoot),
+  pull: (repoRoot: string) => invoke('mt::git::pull', repoRoot),
+  publish: (payload: unknown) => invoke('mt::git::publish', payload as never),
+  clone: (req: unknown) => invoke('mt::git::clone', req as never),
+  savePat: (hostKey: string, pat: string) => invoke('mt::git::save-pat', hostKey, pat),
+  deletePat: (hostKey: string) => invoke('mt::git::delete-pat', hostKey),
+  hasPat: (hostKey: string) => invoke('mt::git::has-pat', hostKey),
+  hostKeyFromUrl: (url: string) => invoke('mt::git::host-key-from-url', url),
+  hostKeyForRepo: (repoRoot: string) => invoke('mt::git::host-key-for-repo', repoRoot),
+  normalizeUrl: (url: string) => invoke('mt::git::normalize-url', url),
+  onProgress: (handler: GitHandler) => {
+    const sub = (_e: IpcRendererEvent, payload: unknown) => handler(payload)
+    ipcRenderer.on('mt::git::progress', sub)
+    return () => ipcRenderer.removeListener('mt::git::progress', sub)
+  },
+  onStatusChanged: (handler: GitHandler) => {
+    const sub = (_e: IpcRendererEvent, payload: unknown) => handler(payload)
+    ipcRenderer.on('mt::git::status-changed', sub)
+    return () => ipcRenderer.removeListener('mt::git::status-changed', sub)
+  }
+}
+
 const electronAPI = {
   ipcRenderer: ipcWrapper,
   shell: shellAPI,
@@ -294,6 +325,7 @@ try {
   contextBridge.exposeInMainWorld('ripgrep', ripgrepAPI)
   contextBridge.exposeInMainWorld('uploader', uploaderAPI)
   contextBridge.exposeInMainWorld('fonts', fontsAPI)
+  contextBridge.exposeInMainWorld('git', gitAPI)
 } catch (error) {
   console.error(error)
 }

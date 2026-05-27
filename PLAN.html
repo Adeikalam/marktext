@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarkText Git Integration Plan</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --muted: #8b9cb3;
+      --accent: #58a6ff;
+      --accent-dim: #388bfd33;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+    nav.toc {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.5rem 1rem;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+    }
+    nav.toc h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin: 0 0 1rem;
+    }
+    nav.toc ul { list-style: none; padding: 0; margin: 0; }
+    nav.toc li { margin: 0.25rem 0; }
+    nav.toc a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      display: block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+    nav.toc a:hover { color: var(--accent); background: var(--accent-dim); }
+    main {
+      max-width: 52rem;
+      padding: 2.5rem 3rem 4rem;
+    }
+    h1 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem;
+      letter-spacing: -0.02em;
+    }
+    .overview {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin-bottom: 2rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 1.35rem;
+      margin: 2.5rem 0 1rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+    }
+    h2:first-of-type { border-top: none; margin-top: 0; }
+    h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; color: var(--accent); }
+    h4 { font-size: 1rem; margin: 1.25rem 0 0.5rem; }
+    p { margin: 0.75rem 0; }
+    ul, ol { margin: 0.75rem 0; padding-left: 1.5rem; }
+    li { margin: 0.35rem 0; }
+    a { color: var(--accent); }
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.875em;
+      background: var(--surface);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.85rem;
+      text-align: left;
+    }
+    th { background: var(--surface); color: var(--muted); font-weight: 500; }
+    tr:nth-child(even) td { background: #1a233208; }
+    .mermaid {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      text-align: center;
+    }
+    .ascii-box {
+      font-family: ui-monospace, monospace;
+      font-size: 0.8rem;
+      white-space: pre;
+      line-height: 1.35;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.2em 0.5em;
+      border-radius: 4px;
+      margin-right: 0.35rem;
+    }
+    .badge-pending { background: #d2992233; color: var(--warning); }
+    .todos {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1.5rem 0 2rem;
+    }
+    .todos h2 { margin-top: 0; border: none; padding: 0; font-size: 1rem; }
+    .todos ol { margin: 0.5rem 0 0; }
+    .todos li { margin: 0.5rem 0; }
+    hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+    strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#goals">Goals and constraints</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#layer1">Layer 1 — Types &amp; IPC</a></li>
+        <li><a href="#layer2">Layer 2 — Main process</a></li>
+        <li><a href="#layer3">Layer 3 — Pinia store</a></li>
+        <li><a href="#layer4">Layer 4 — UI/UX</a></li>
+        <li><a href="#layer5">Layer 5 — Menu &amp; i18n</a></li>
+        <li><a href="#layer6">Layer 6 — Errors</a></li>
+        <li><a href="#phases">Phased delivery</a></li>
+        <li><a href="#testing">Testing</a></li>
+        <li><a href="#security">Security</a></li>
+        <li><a href="#files">Key files</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <main>
+      <h1>MarkText Git Integration Plan</h1>
+      <p class="overview">
+        Add Azure DevOps–focused Git integration to MarkText via a main-process Git service built on
+        <strong>isomorphic-git</strong> (bundled with the app — users do not install Git locally),
+        a simplified Source sidebar panel, PAT auth stored in OS keychain, automatic background fetch with clear sync status,
+        diff review, and one-click commit/push/pull flows aimed at non-technical documentation writers.
+      </p>
+
+      <section class="todos" id="todos">
+        <h2>Implementation todos</h2>
+        <ol>
+          <li><span class="badge badge-pending">pending</span> <strong>foundation-ipc</strong> — Add shared git types, <code>mt::git::*</code> IPC channels, preload <code>window.git</code> API, register handlers in main/ipc</li>
+          <li><span class="badge badge-pending">pending</span> <strong>git-service</strong> — Implement main/git service (isomorphic-git, Node <code>fs</code> adapter, PAT via keytar, Azure DevOps URL parse, error mapping)</li>
+          <li><span class="badge badge-pending">pending</span> <strong>git-store</strong> — Create renderer git Pinia store with auto-fetch polling, project hooks, status-changed listener</li>
+          <li><span class="badge badge-pending">pending</span> <strong>sidebar-ui</strong> — Add Git sidebar panel with sync banner, changed-files list, non-technical copy/i18n</li>
+          <li><span class="badge badge-pending">pending</span> <strong>clone-wizard</strong> — Build Connect/Clone wizard (URL + PAT + destination) wired to clone IPC and OPEN_PROJECT</li>
+          <li><span class="badge badge-pending">pending</span> <strong>diff-view</strong> — Implement DiffView modal using CodeMirror diff mode and git diff IPC</li>
+          <li><span class="badge badge-pending">pending</span> <strong>publish-pull</strong> — Share with team (stage/commit/push) and Get latest changes (ff-only pull + conflict UX)</li>
+          <li><span class="badge badge-pending">pending</span> <strong>tests-docs</strong> — Unit tests for parse/status/errors, E2E smoke with local bare repo, end-user GIT.md</li>
+        </ol>
+      </section>
+
+      <h2 id="goals">Goals and constraints</h2>
+      <p>
+        MarkText today has <strong>no Git integration</strong> — one folder per editor window
+        (<code>src/renderer/src/store/project.ts</code>), sandboxed renderer, and main-process IPC for external tools (ripgrep, uploader).
+        This plan adds documentation-centric version control without exposing Git jargon.
+      </p>
+
+      <h3>In scope (initial release)</h3>
+      <ul>
+        <li>Clone an Azure DevOps repo by URL + PAT</li>
+        <li>Auto-fetch remote changes; clearly show when local is behind</li>
+        <li>One-click <strong>Get latest changes</strong> (pull) with plain-language conflict guidance</li>
+        <li>Review diffs per file</li>
+        <li>Commit and push to the current branch</li>
+      </ul>
+
+      <h3>Explicit choices</h3>
+      <ul>
+        <li><strong>Auth:</strong> Personal Access Token stored in OS keychain via existing <code>keytar</code> in <code>src/main/dataCenter/index.ts</code></li>
+        <li><strong>Behind remote:</strong> Offer pull; guide user if conflicts occur (do not silently merge or block without explanation)</li>
+      </ul>
+
+      <h3>Out of scope for v1</h3>
+      <ul>
+        <li>Branch creation/switching UI (show current branch only in v1)</li>
+        <li>Merge conflict resolution inside the editor</li>
+        <li>SSH remotes, multi-remote repos, stash, rebase, cherry-pick</li>
+        <li>GitHub/GitLab-specific flows (Azure DevOps first; URLs remain generic HTTPS)</li>
+      </ul>
+
+      <h2 id="architecture">Architecture overview</h2>
+      <div class="mermaid">
+flowchart TB
+  subgraph renderer [Renderer - Vue/Pinia]
+    GitPanel["sideBar/git.vue"]
+    GitStore["store/git.ts"]
+    DiffView["components/git/DiffView.vue"]
+    CloneWizard["components/git/CloneWizard.vue"]
+    GitPanel --> GitStore
+    GitStore --> DiffView
+    GitStore --> CloneWizard
+  end
+
+  subgraph preload [Preload]
+    GitAPI["window.git"]
+  end
+
+  subgraph main [Main Process]
+    GitIPC["ipc/git.ts"]
+    GitService["git/service.ts"]
+    GitAuth["git/auth.ts - PAT via keytar"]
+    GitIPC --> GitService
+    GitService --> GitAuth
+    GitService -->|"isomorphic-git API"| IsoGit["isomorphic-git (bundled)"]
+  end
+
+  GitStore -->|"invoke + events"| GitAPI
+  GitAPI --> GitIPC
+  GitService -->|"mt::git::status-changed"| GitStore
+      </div>
+
+      <p>
+        <strong>Why <a href="https://isomorphic-git.org/">isomorphic-git</a> (not system <code>git</code>):</strong>
+        Non-technical users cannot be expected to install Git. isomorphic-git is pure JavaScript, ships inside MarkText,
+        and runs in the <strong>main process</strong> with Node’s <code>fs</code> — same IPC boundary as today
+        (<code>src/main/ipc/ripgrep.ts</code>, <code>src/main/ipc/uploader.ts</code>), but no external binary.
+      </p>
+      <p>
+        <strong>Trade-offs to accept:</strong> slower on very large repos than native Git; some advanced Git features unavailable in v1;
+        Azure DevOps HTTPS + PAT must be validated early via <code>onAuth</code> callbacks. Bundle size increases (~hundreds of KB minified).
+      </p>
+      <p>
+        <strong>Repo root detection:</strong> When a folder is opened, walk up from <code>projectTree.pathname</code> to find <code>.git</code>
+        (supports docs in subfolders). Attach Git state to the <strong>repo root</strong>, not necessarily the opened folder.
+      </p>
+
+      <h2 id="layer1">Layer 1 — Shared types and IPC contract</h2>
+      <p>Add <code>src/shared/types/git.ts</code>:</p>
+      <pre><code>// Conceptual shapes (to be finalized during implementation)
+type GitFileChangeKind = 'modified' | 'added' | 'deleted' | 'renamed'
+interface GitChangedFile { path: string; kind: GitFileChangeKind; staged: boolean }
+interface GitSyncStatus {
+  branch: string
+  ahead: number      // local commits not on remote
+  behind: number     // remote commits not local
+  lastFetchedAt: number | null
+  hasUncommittedChanges: boolean
+}
+interface GitDiffResult {
+  path: string
+  unifiedDiff: string   // raw patch for CodeMirror diff mode
+  oldContent?: string
+  newContent?: string
+}
+interface GitCloneRequest {
+  url: string          // Azure DevOps HTTPS URL
+  destinationPath: string
+  patHostKey: string   // e.g. dev.azure.com/myorg
+}</code></pre>
+
+      <p>Extend <code>src/shared/types/ipc.ts</code> with <code>mt::git::*</code> channels:</p>
+      <table>
+        <thead>
+          <tr><th>Channel</th><th>Type</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>mt::git::detect-repo</code></td><td>invoke</td><td>Find repo root for a path (walk for <code>.git</code>)</td></tr>
+          <tr><td><code>mt::git::clone</code></td><td>invoke + progress events</td><td>Clone with PAT</td></tr>
+          <tr><td><code>mt::git::fetch</code></td><td>invoke</td><td>Background fetch</td></tr>
+          <tr><td><code>mt::git::status</code></td><td>invoke</td><td>Changed files + sync counts</td></tr>
+          <tr><td><code>mt::git::diff</code></td><td>invoke</td><td>Unified diff for one file</td></tr>
+          <tr><td><code>mt::git::stage</code></td><td>invoke</td><td>Stage paths (or all)</td></tr>
+          <tr><td><code>mt::git::commit</code></td><td>invoke</td><td>Commit with message</td></tr>
+          <tr><td><code>mt::git::push</code></td><td>invoke + progress</td><td>Push current branch</td></tr>
+          <tr><td><code>mt::git::pull</code></td><td>invoke + progress</td><td>Pull with conflict detection</td></tr>
+          <tr><td><code>mt::git::save-pat</code> / <code>mt::git::has-pat</code></td><td>invoke</td><td>PAT keychain ops</td></tr>
+          <tr><td><code>mt::git::progress</code></td><td>push event</td><td>Clone/push/pull line output</td></tr>
+          <tr><td><code>mt::git::status-changed</code></td><td>push event</td><td>After fetch or file save</td></tr>
+        </tbody>
+      </table>
+      <p>
+        Register handlers in <code>src/main/ipc/index.ts</code> via new <code>src/main/ipc/git.ts</code>.
+        Expose typed <code>window.git</code> in <code>src/preload/index.ts</code> (mirror <code>window.ripgrep</code> for streaming ops)
+        and declare in <code>src/types/global.d.ts</code>.
+      </p>
+
+      <h2 id="layer2">Layer 2 — Main-process Git service</h2>
+      <h3>File layout</h3>
+      <pre><code>src/main/git/
+  fs.ts           # Node fs adapter passed to every isomorphic-git call
+  service.ts      # Core operations (statusMatrix, commit, push, pull, fetch)
+  auth.ts         # onAuth + PAT from keytar (never exposed to renderer)
+  clone.ts        # Clone wizard backend (git.clone + onProgress)
+  diff.ts         # Build unified diffs from blobs / working tree (not CLI)
+  parse.ts        # Azure DevOps URL normalization, ahead/behind helpers
+  errors.ts       # Map isomorphic-git errors → user-facing codes
+src/main/ipc/git.ts</code></pre>
+
+      <h3>isomorphic-git setup (main process only)</h3>
+      <ul>
+        <li>Add dependency: <code>isomorphic-git</code> (and <code>diff</code> or similar if needed for unified patch text)</li>
+        <li>Always use Node <code>fs</code> from <code>node:fs/promises</code> — <strong>never</strong> run isomorphic-git in the renderer (sandbox + bundle size)</li>
+        <li>Configure <code>electron-vite</code> if needed so isomorphic-git resolves cleanly in the main bundle (pure JS; no <code>electron-rebuild</code>)</li>
+        <li>No <code>mt::git::exists</code> channel — Git is always available once the app is installed</li>
+      </ul>
+
+      <h3>PAT authentication (<code>auth.ts</code>)</h3>
+      <ul>
+        <li><strong>Storage:</strong> Extend <code>DataCenter.encryptKeys</code> with keys like <code>git-pat-{hostKey}</code> where <code>hostKey</code> = normalized host + org (e.g. <code>dev.azure.com/contoso</code>)</li>
+        <li><strong>Usage:</strong> Pass <code>onAuth</code> to every network operation (<code>clone</code>, <code>fetch</code>, <code>push</code>, <code>pull</code>). For Azure DevOps HTTPS PAT: return <code>{ username: '', password: pat }</code> (empty username + token as password is the standard pattern)</li>
+        <li><strong>Never</strong> log PAT; never send PAT to renderer except masked indicator (“Connected as …”)</li>
+        <li><strong>Never</strong> persist PAT inside <code>.git/config</code> or remote URLs in the repo</li>
+        <li><strong>PAT scope guidance</strong> in UI: Code (Read &amp; Write) for clone/push; link to Azure DevOps PAT docs</li>
+      </ul>
+
+      <h3>Azure DevOps URL handling (<code>parse.ts</code>)</h3>
+      <p>Normalize user-pasted URLs:</p>
+      <ul>
+        <li><code>https://dev.azure.com/{org}/{project}/_git/{repo}</code></li>
+        <li><code>https://{org}@dev.azure.com/{project}/_git/{repo}</code></li>
+        <li>Legacy <code>https://{org}.visualstudio.com/...</code></li>
+      </ul>
+      <p>Validate HTTPS only in v1; reject SSH (<code>git@...</code>) with friendly message.</p>
+
+      <h3>Core operations (isomorphic-git APIs)</h3>
+      <ul>
+        <li><strong>Status:</strong> <code>statusMatrix({ fs, dir, filter })</code> → map to <code>GitChangedFile[]</code>; branch via <code>currentBranch</code> / <code>listBranches</code></li>
+        <li><strong>Ahead / behind:</strong> <code>fetch</code> then compare <code>HEAD</code> to <code>remoteRef</code> (e.g. <code>refs/remotes/origin/&lt;branch&gt;</code>) using <code>log</code> or commit walk helpers in <code>parse.ts</code></li>
+        <li><strong>Auto-fetch:</strong> Renderer schedules periodic <code>mt::git::fetch</code> (default <strong>every 3 minutes</strong> when Git panel visible; <strong>every 5 minutes</strong> when hidden). Main calls <code>git.fetch({ fs, dir, onAuth })</code>, then emits <code>mt::git::status-changed</code>.</li>
+        <li><strong>Diff:</strong> <code>diff.ts</code> — read blob at <code>HEAD</code> via <code>readBlob</code>, read working tree via <code>fs</code>, produce unified diff string for CodeMirror (isomorphic-git has no single “porcelain diff” command)</li>
+        <li><strong>Stage / commit:</strong> <code>add</code> per path (or all changed) then <code>commit</code> with message + author from preferences (name/email required for commits)</li>
+        <li><strong>Push:</strong> <code>push({ fs, dir, remote, ref, onAuth, onProgress })</code></li>
+        <li><strong>Pull (ff-only):</strong> <code>fetch</code> then fast-forward <code>checkout</code> / merge only if ancestor check passes; otherwise return <code>conflicts: true</code> + paths from <code>statusMatrix</code> conflict entries; show guidance banner</li>
+        <li><strong>Clone:</strong> <code>clone({ fs, dir, url, onAuth, onProgress, depth: 1 })</code> optional shallow clone for large doc repos</li>
+      </ul>
+
+      <h3>Hide <code>.git</code> from file tree</h3>
+      <p>
+        Update chokidar / tree building in <code>src/main/filesystem/watcher.ts</code> and
+        <code>src/renderer/src/store/treeCtrl.ts</code> to ignore <code>.git</code> (similar to <code>node_modules</code> ignore).
+      </p>
+
+      <h2 id="layer3">Layer 3 — Renderer: Pinia store</h2>
+      <p>New <code>src/renderer/src/store/git.ts</code> (setup store, like <code>project.ts</code>):</p>
+
+      <h4>State</h4>
+      <p><code>repoRoot</code>, <code>branch</code>, <code>syncStatus</code> (ahead/behind), <code>changedFiles[]</code>, <code>isLoading</code>, <code>lastError</code>, <code>isRepo</code>, <code>hasPat</code>, <code>fetchTimerId</code></p>
+
+      <h4>Actions</h4>
+      <ul>
+        <li><code>initForProject(pathname)</code> — detect repo, load PAT status, start fetch interval</li>
+        <li><code>refresh()</code> — status + sync counts</li>
+        <li><code>fetchRemote()</code> — invoke fetch, then refresh</li>
+        <li><code>pullLatest()</code> — invoke pull; on conflict set <code>conflictFiles[]</code></li>
+        <li><code>publish(message)</code> — stage all → commit → push (main “happy path”)</li>
+        <li><code>openDiff(path)</code> — load diff into DiffView</li>
+        <li><code>stopPolling()</code> — on project close / unmount</li>
+      </ul>
+
+      <h4>Hooks</h4>
+      <ul>
+        <li>Watch <code>projectStore.projectTree</code> → <code>initForProject</code></li>
+        <li>After editor save success → debounced <code>refresh()</code> (300 ms)</li>
+        <li>Listen for <code>mt::git::status-changed</code> from main</li>
+      </ul>
+
+      <h2 id="layer4">Layer 4 — UI/UX (non-technical language)</h2>
+      <h3>Terminology map</h3>
+      <table>
+        <thead><tr><th>Git term</th><th>User-facing label</th></tr></thead>
+        <tbody>
+          <tr><td>Repository</td><td>Documentation folder</td></tr>
+          <tr><td>Clone</td><td>Connect to shared folder</td></tr>
+          <tr><td>Branch</td><td>Version line (e.g. “Working on: <strong>main</strong>”)</td></tr>
+          <tr><td>Commit</td><td>Save snapshot</td></tr>
+          <tr><td>Push</td><td>Share with team</td></tr>
+          <tr><td>Pull / Fetch</td><td>Get latest changes</td></tr>
+          <tr><td>Staged</td><td>Ready to share</td></tr>
+          <tr><td>Modified</td><td>You changed this</td></tr>
+          <tr><td>Ahead</td><td>Your snapshots not shared yet</td></tr>
+          <tr><td>Behind</td><td>New team changes available</td></tr>
+          <tr><td>PAT</td><td>Access token (with “What’s this?” link)</td></tr>
+        </tbody>
+      </table>
+
+      <h3>A. Clone / Connect flow</h3>
+      <p><strong>Entry points:</strong> File menu “Connect to documentation repository…”, Git sidebar empty state CTA, command palette.</p>
+      <p><code>src/renderer/src/components/git/CloneWizard.vue</code> — modal wizard, 3 steps:</p>
+      <ol>
+        <li><strong>Paste link</strong> — URL field + Azure DevOps example placeholder</li>
+        <li><strong>Sign in</strong> — PAT field + link to create token; “Save securely on this computer”</li>
+        <li><strong>Choose location</strong> — folder picker (default <code>~/Documents/MarkText/{repo-name}</code>) + Clone with progress</li>
+      </ol>
+      <p>On success: <code>OPEN_PROJECT(clonedPath)</code> via existing project store / <code>mt::open-directory</code> flow.</p>
+
+      <h3>B. Git sidebar panel</h3>
+      <p>Add to <code>sideBar/help.ts</code> (<code>id: 'git'</code>) and <code>sideBar/index.vue</code>.</p>
+      <pre class="ascii-box">┌─────────────────────────────────┐
+│ Working on: main                │
+│ ● 2 new team changes available  │  ← amber banner when behind > 0
+│   [Get latest changes]          │
+├─────────────────────────────────┤
+│ YOUR CHANGES (3)                │
+│  ● intro.md        You changed  │
+│  ● setup.md        You changed  │
+│  + new-page.md     New file      │
+├─────────────────────────────────┤
+│ [Review all]  [Share with team] │
+└─────────────────────────────────┘</pre>
+      <ul>
+        <li><strong>Sync banner:</strong> green = up to date; amber = behind; blue = unshared snapshots (ahead &gt; 0)</li>
+        <li><strong>File rows:</strong> click → open in editor; icon → diff review</li>
+        <li><strong>Share with team:</strong> commit dialog → commit + push</li>
+        <li><strong>Empty states:</strong> no folder / not a repo / no changes (mirror <code>search.vue</code>)</li>
+      </ul>
+      <p>Optional title-bar indicator when <code>behind &gt; 0</code> or unshared local commits.</p>
+
+      <h3>C. Diff review</h3>
+      <p><code>src/renderer/src/components/git/DiffView.vue</code> — modal overlay (v1), CodeMirror 5 <code>diff</code> mode, filename + line summary. “Edit file” opens normal tab.</p>
+
+      <h3>D. Pull + conflict UX</h3>
+      <ul>
+        <li>Tab notification via <code>pushTabNotification</code> on affected open tabs</li>
+        <li>Git panel: conflicted files with “Needs your attention” badge</li>
+        <li>Plain message; v1 does not embed merge tool</li>
+      </ul>
+
+      <h3>E. Preferences</h3>
+      <ul>
+        <li>Auto-check for team changes (on/off)</li>
+        <li>Check interval (3 / 5 / 10 min)</li>
+        <li>Commit author name / email (required by isomorphic-git for commits)</li>
+        <li>“Connected accounts” list with disconnect</li>
+      </ul>
+
+      <h2 id="layer5">Layer 5 — Menu, commands, i18n</h2>
+      <ul>
+        <li><strong>View menu:</strong> “Source Control” toggles <code>rightColumn: 'git'</code></li>
+        <li><strong>Commands:</strong> <code>git.publish</code>, <code>git.pull</code>, <code>git.review-changes</code>, <code>git.connect-repo</code></li>
+        <li><strong>Locales:</strong> <code>sideBar.git.*</code>, <code>git.clone.*</code>, <code>git.errors.*</code> under <code>static/locales/</code></li>
+        <li><strong>User docs:</strong> <code>docs/end-user/GIT.md</code> (Azure DevOps PAT walkthrough)</li>
+      </ul>
+
+      <h2 id="layer6">Layer 6 — Error handling</h2>
+      <table>
+        <thead><tr><th>Git error</th><th>User message</th></tr></thead>
+        <tbody>
+          <tr><td>Auth failed (401)</td><td>“Your access token expired or is invalid. Update it in Connect settings.”</td></tr>
+          <tr><td>Not a git repo</td><td>“This folder isn’t connected to shared documentation yet.”</td></tr>
+          <tr><td>Push rejected (non-ff)</td><td>“Get latest changes first, then share again.”</td></tr>
+          <tr><td>Network failure</td><td>“Couldn’t reach the server. Check your internet connection.”</td></tr>
+          <tr><td>Clone / network timeout</td><td>“This is taking longer than expected. Check your connection or try again.”</td></tr>
+        </tbody>
+      </table>
+      <p>Never surface raw exception messages or stack traces in UI; log via <code>electron-log</code> only.</p>
+
+      <h2 id="phases">Phased delivery</h2>
+      <h3>Phase 1 — Foundation (MVP core)</h3>
+      <ul>
+        <li>Git service + IPC + preload API</li>
+        <li>PAT storage in keytar</li>
+        <li>Repo detection on folder open</li>
+        <li>Git sidebar with status list + sync banner</li>
+        <li>Auto-fetch polling</li>
+        <li>Unit tests: URL parse, status parse, error mapping</li>
+      </ul>
+
+      <h3>Phase 2 — Clone + Publish</h3>
+      <ul>
+        <li>Clone wizard (Azure DevOps HTTPS)</li>
+        <li>Diff review modal</li>
+        <li>Commit + push (“Share with team”)</li>
+        <li>File menu + command palette wiring</li>
+      </ul>
+
+      <h3>Phase 3 — Pull + polish</h3>
+      <ul>
+        <li>“Get latest changes” (ff-only pull)</li>
+        <li>Conflict detection UX + tab notifications</li>
+        <li>Title-bar sync indicator</li>
+        <li>Preferences for fetch interval</li>
+        <li>E2E smoke test with local bare repo</li>
+      </ul>
+
+      <h3>Phase 4 — Enhancements (post-MVP)</h3>
+      <ul>
+        <li>Branch picker (switch only)</li>
+        <li>Partial staging (checkbox per file)</li>
+        <li>Side-by-side “simple” diff for Markdown</li>
+        <li>“Recent repositories” list</li>
+        <li>Offline mode indicator</li>
+      </ul>
+
+      <h2 id="testing">Testing strategy</h2>
+      <p><strong>Unit tests</strong> (<code>test/unit/specs/</code>):</p>
+      <ul>
+        <li><code>git-parse.spec.ts</code> — Azure DevOps URL normalization</li>
+        <li><code>git-status.spec.ts</code> — <code>statusMatrix</code> → <code>GitChangedFile[]</code> mapping</li>
+        <li><code>git-errors.spec.ts</code> — isomorphic-git / HTTP errors → error codes</li>
+        <li><code>git-diff.spec.ts</code> — unified diff generation from blobs + working tree</li>
+      </ul>
+      <p><strong>Integration tests:</strong> use isomorphic-git in temp dirs end-to-end (init → add → commit → push to local bare repo). CI does not require system Git; optional: use system Git only in test fixtures to create bare repos if simpler.</p>
+      <p><strong>E2E:</strong> scripted local remote; verify sync banner when <code>behind &gt; 0</code>.</p>
+      <p><strong>Manual QA (Azure DevOps):</strong> clone private repo; edit → diff → share; two clients push/pull; simultaneous edit conflict message.</p>
+
+      <h2 id="security">Security checklist</h2>
+      <ul>
+        <li>PAT only in main process + OS keychain (supplied via <code>onAuth</code> only)</li>
+        <li>Clear PAT when user disconnects account</li>
+        <li>Do not write PAT to <code>.git/config</code> in plain text</li>
+        <li>Validate clone destination (no path traversal via repo name)</li>
+        <li>IPC: validate all paths stay within allowed directories</li>
+      </ul>
+
+      <h2 id="files">Key files to create/modify</h2>
+      <h3>Create</h3>
+      <ul>
+        <li><code>src/shared/types/git.ts</code></li>
+        <li><code>src/main/git/{service,auth,clone,parse,errors}.ts</code></li>
+        <li><code>src/main/ipc/git.ts</code></li>
+        <li><code>src/renderer/src/store/git.ts</code></li>
+        <li><code>src/renderer/src/components/sideBar/git.vue</code></li>
+        <li><code>src/renderer/src/components/git/{CloneWizard,DiffView,CommitDialog}.vue</code></li>
+        <li><code>test/unit/specs/git-*.spec.ts</code></li>
+      </ul>
+      <h3>Modify</h3>
+      <ul>
+        <li><code>src/shared/types/ipc.ts</code></li>
+        <li><code>src/preload/index.ts</code>, <code>src/types/global.d.ts</code></li>
+        <li><code>src/main/ipc/index.ts</code></li>
+        <li><code>src/main/dataCenter/index.ts</code></li>
+        <li><code>src/renderer/src/components/sideBar/{help.ts,index.vue}</code></li>
+        <li><code>src/renderer/src/pages/app.vue</code></li>
+        <li><code>src/main/menu/templates/file.ts</code></li>
+        <li><code>package.json</code> — add <code>isomorphic-git</code> (and <code>diff</code> if used for patch text)</li>
+      </ul>
+
+      <h2 id="risks">Risk notes</h2>
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>PAT expiry</td><td>Clear UI + re-enter token flow; test auth errors early</td></tr>
+          <tr><td>Large repos slow to clone</td><td>Progress events + cancel; shallow clone (<code>--depth 1</code>)</td></tr>
+          <tr><td>ff-only pull fails often</td><td>Expected for concurrent edits; conflict UX is differentiator</td></tr>
+          <tr><td>WYSIWYG vs on-disk content</td><td>Save-before-commit (save-all if dirty tabs)</td></tr>
+          <tr><td>Linux keytar</td><td>Already used; test on AppImage/snap (libsecret)</td></tr>
+          <tr><td>isomorphic-git limitations</td><td>Document v1 limits; ff-only pull; test Azure DevOps early; shallow clone for huge repos</td></tr>
+          <tr><td>Main bundle size</td><td>Monitor packaged app size; tree-shake isomorphic-git imports where possible</td></tr>
+        </tbody>
+      </table>
+
+      <hr />
+      <p style="color: var(--muted); font-size: 0.875rem;">
+        MarkText Git Integration Plan — generated from project planning session.
+        Open this file in a browser for navigation and diagram rendering.
+      </p>
+    </main>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true }
+    })
+  </script>
+</body>
+</html>

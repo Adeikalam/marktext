@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MarkText is a WYSIWYG markdown editor built on Electron + Vue 3. It supports CommonMark, GitHub Flavored Markdown, math (KaTeX), Mermaid diagrams, PlantUML, and multiple editing modes (focus, typewriter, source-code).
 
+Documentation-centric **Git integration** (Azure DevOps HTTPS + PAT) lets non-technical users connect to a shared repo, review changes, share snapshots (commit/push), and pull team updates — without installing Git locally. See [Git integration](#git-integration) below and `PLAN.html` for the full roadmap.
+
 - **Version**: see `package.json`
 - **License**: MIT
 - **Repository**: https://github.com/marktext/marktext
@@ -26,6 +28,7 @@ MarkText is a WYSIWYG markdown editor built on Electron + Vue 3. It supports Com
 | UI library | Element Plus |
 | Unit tests | Vitest 4 |
 | E2E tests | Playwright |
+| Git (bundled) | isomorphic-git + diff (main process only; no system `git` CLI) |
 | Package manager | pnpm >=10 (`packageManager: pnpm@10.33.4`) |
 | Node.js minimum | >=20.19.0 (PR CI: Node 22.21.1 · release CI: Node 24.14.1) |
 
@@ -35,6 +38,8 @@ MarkText is a WYSIWYG markdown editor built on Electron + Vue 3. It supports Com
 src/
   common/      Pure Node.js utilities — usable from main, preload, and renderer
   main/        Electron main process (IO, native dialogs, window management, auto-updater)
+    git/       Git service (isomorphic-git, PAT auth, clone/status/diff/commit/push/pull)
+    ipc/       Sandbox IPC handlers including git.ts
   preload/     Electron preload scripts (bridge to the renderer; renderer runs sandboxed
                with contextIsolation: true, nodeIntegration: false, sandbox: true
                since #4244 — all Node access flows through the typed contextBridge
@@ -42,9 +47,12 @@ src/
   renderer/    Vue 3 application (editor UI, Pinia stores, components)
     src/
       components/    Vue single-file components
-      store/         Pinia stores (editor.js, preferences.js, layout.js, …)
+        sideBar/     Includes git.vue (Source Control panel)
+        git/         CloneWizard, DiffView, CommitDialog
+      store/         Pinia stores (editor.js, preferences.js, layout.js, git.ts, …)
       pages/         Top-level Vue pages / routes
       router/        Vue Router configuration
+  shared/types/  Cross-process types including git.ts, ipc.ts
   muya/        Core editor backend — primarily JS + DOM; avoids Electron APIs.
                Exception: src/muya/lib/parser/render/plantuml.js imports Node's `zlib`.
     lib/
@@ -114,6 +122,7 @@ pnpm run lint          # ESLint (run before committing; not currently enforced b
 pnpm run typecheck     # vue-tsc --noEmit (run before committing; CI enforces)
 
 # Run a single Vitest file or test name (specs live under test/unit/specs/)
+pnpm exec vitest run test/unit/specs/git-parse.spec.js
 pnpm exec vitest run test/unit/specs/markdown-basic.spec.js
 pnpm exec vitest run -t 'partial test name'
 
@@ -132,7 +141,7 @@ Enforced by ESLint + Prettier. Run `pnpm run lint` and `pnpm run typecheck` befo
 - TypeScript with `strict: true`; see `docs/dev/TYPESCRIPT.md`
 - Cross-process types live in `src/shared/types/`; ambient declarations in `src/types/`
 - IPC channels are typed via the contract in `src/shared/types/ipc.ts`
-- The renderer is fully sandboxed — every IPC and Node access goes through `window.electron.*` / `window.fileUtils.*` etc. (typed in `src/types/global.d.ts`)
+- The renderer is fully sandboxed — every IPC and Node access goes through `window.electron.*` / `window.fileUtils.*` / `window.git.*` etc. (typed in `src/types/global.d.ts`)
 
 ## Architecture: Three-Process Electron Model
 
@@ -167,6 +176,75 @@ Most IPC channels between main and renderer use the `mt::` prefix (e.g. `mt::ope
 
 See `docs/dev/IPC.md` for conventions and examples.
 
+## Git integration
+
+Git runs entirely in the **main process** via [isomorphic-git](https://isomorphic-git.org/) with Node `fs`. Users do not need Git installed. The renderer talks to Git only through `window.git` (preload) and `mt::git::*` IPC channels defined in `src/shared/types/ipc.ts`.
+
+### Architecture
+
+```
+renderer (git Pinia store, sideBar/git.vue, CloneWizard, DiffView, CommitDialog)
+    ↕ window.git  (src/preload/index.ts)
+    ↕ mt::git::*  invoke + push events
+main (src/main/ipc/git.ts → src/main/git/*.ts)
+    ↕ isomorphic-git + Node fs
+    ↕ HTTPS (Azure DevOps) with PAT via onAuth
+```
+
+**Repo root detection:** walk up from `projectTree.pathname` to find `.git`; Git state attaches to the repo root, not necessarily the opened folder.
+
+**Authentication:** Personal Access Token per host (e.g. `dev.azure.com/{org}`). Stored via `keytar` when the OS secret service is available; falls back to `{userData}/git-pats.json` (mode `0600`) on Linux without `org.freedesktop.secrets`.
+
+**User-facing copy:** non-technical labels in `static/locales/en.json` under `sideBar.git.*` and `git.*` (e.g. “Share with team” instead of “push”).
+
+### Key files
+
+| Area | Path |
+|------|------|
+| Shared types | `src/shared/types/git.ts` |
+| Main service | `src/main/git/{service,auth,clone,parse,diff,errors,fs}.ts` |
+| IPC handlers | `src/main/ipc/git.ts` |
+| Preload API | `src/preload/index.ts` (`window.git`) |
+| Renderer store | `src/renderer/src/store/git.ts` |
+| Sidebar panel | `src/renderer/src/components/sideBar/git.vue` |
+| Clone / diff / commit UI | `src/renderer/src/components/git/` |
+| Unit tests | `test/unit/specs/git-parse.spec.ts` |
+| Plan / roadmap | `PLAN.html` |
+
+### IPC channels (summary)
+
+Invoke: `mt::git::detect-repo`, `status`, `fetch`, `diff`, `stage`, `commit`, `push`, `pull`, `publish`, `clone`, `save-pat`, `has-pat`, `normalize-url`, …
+
+Push events: `mt::git::status-changed`, `mt::git::progress`
+
+Errors thrown from main use `rethrowUserError()` (`src/main/git/errors.ts`) so the renderer receives a normal `Error` with a user-facing `message`.
+
+### Opening a cloned repo
+
+After clone, the renderer sends `app-open-directory-by-id` with `(windowId, repoRoot, true)`. The handler in `src/main/app/index.ts` must accept **both** `ipcMain.emit` (no event arg) and `ipcRenderer.send` (event as first arg) — do not regress this when touching folder-open IPC.
+
+### Implemented (MVP)
+
+- Connect / clone (Azure DevOps HTTPS + PAT)
+- Source Control sidebar: sync banner (ahead/behind), changed files, diff review
+- Share with team (stage all → commit → push)
+- Get latest changes (fetch + ff-only pull, conflict file list)
+- Auto-fetch polling from the git store
+- `.git` ignored in chokidar file tree
+
+### Not yet implemented
+
+- Save-all before commit/push (dirty WYSIWYG tabs)
+- View menu and command palette entries
+- Commit author name/email in preferences
+- Title-bar sync indicator
+- Branch switching UI
+- Partial file staging
+- Non-English locales for git strings
+- E2E tests; `docs/end-user/GIT.md`
+
+When extending Git features, register new channels in `src/shared/types/ipc.ts`, handlers in `src/main/ipc/git.ts`, and expose them on `window.git` in preload + `src/types/global.d.ts`.
+
 ## Further Reading
 
 `docs/dev/` contains the deeper developer documentation referenced by this guide:
@@ -185,7 +263,7 @@ See `docs/dev/IPC.md` for conventions and examples.
 - **CommonJS vs ESM**: `main` and `preload` compile to CommonJS; `renderer` is ESM-only. Do not use `require()` in renderer code.
 - **Minify locales**: `pnpm run minify-locales` must run before production builds. It is included in `build:win/mac/linux` but not in `dev`.
 - **Native modules**: After changing Electron version, run `pnpm run rebuild-native` (`electron-rebuild -f`).
-- **Hot reload**: The renderer hot-reloads via Vite HMR. `Ctrl+R` in the dev window reloads the renderer and re-runs the preload script. Changes to `main/` source are NOT picked up by a window reload — restart `pnpm run dev` to pick them up.
+- **Hot reload**: The renderer hot-reloads via Vite HMR. `Ctrl+R` in the dev window reloads the renderer and re-runs the preload script. Changes to `main/` source are NOT picked up by a window reload — restart `pnpm run dev` to pick them up (required after editing `src/main/git/` or IPC handlers).
 - **Path aliases** (defined in `electron.vite.config.js`): `@` → `src/renderer/src`, `common` → `src/common`, `muya` → `src/muya`. Imports from muya therefore look like `muya/lib/...`.
 
 ## Contribution

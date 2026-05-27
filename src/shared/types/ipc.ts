@@ -32,6 +32,16 @@ import type {
 } from './files'
 import type { BufferedState as BufferedStateType } from './bufferedState'
 import type { MenuTemplate, MenuPopupPosition } from './menu'
+import type {
+  GitCloneRequest,
+  GitCloneResult,
+  GitCommitRequest,
+  GitCommitResult,
+  GitDiffResult,
+  GitProgressEvent,
+  GitPullResult,
+  GitStatusResult
+} from './git'
 
 // =================================================================
 // Invoke channels (renderer → main, returns Promise<T>)
@@ -44,6 +54,31 @@ export interface IpcInvokeChannels {
   'mt::clipboard::read-text': { args: []; ret: string }
   'mt::cmd::exists': { args: [name: string]; ret: boolean }
   'mt::fonts::list': { args: []; ret: string[] }
+  'mt::git::clone': { args: [req: GitCloneRequest]; ret: GitCloneResult }
+  'mt::git::commit': { args: [req: GitCommitRequest]; ret: GitCommitResult }
+  'mt::git::delete-pat': { args: [hostKey: string]; ret: void }
+  'mt::git::detect-repo': { args: [startPath: string]; ret: string | null }
+  'mt::git::diff': { args: [repoRoot: string, filePath: string]; ret: GitDiffResult }
+  'mt::git::fetch': { args: [repoRoot: string]; ret: GitStatusResult }
+  'mt::git::has-pat': { args: [hostKey: string]; ret: boolean }
+  'mt::git::host-key-for-repo': { args: [repoRoot: string]; ret: string | null }
+  'mt::git::host-key-from-url': { args: [url: string]; ret: string }
+  'mt::git::normalize-url': {
+    args: [url: string]
+    ret: { url: string; hostKey: string; repoName: string | null }
+  }
+  'mt::git::publish': {
+    args: [payload: { repoRoot: string; message: string; author: { name: string; email: string } }]
+    ret: GitStatusResult
+  }
+  'mt::git::pull': {
+    args: [repoRoot: string]
+    ret: GitPullResult & { status: GitStatusResult }
+  }
+  'mt::git::push': { args: [repoRoot: string]; ret: GitStatusResult }
+  'mt::git::save-pat': { args: [hostKey: string, pat: string]; ret: void }
+  'mt::git::stage': { args: [repoRoot: string, paths?: string[]]; ret: void }
+  'mt::git::status': { args: [startPath: string]; ret: GitStatusResult }
   'mt::fs-trash-item': { args: [pathname: string]; ret: void }
   'mt::fs::copy': { args: [src: string, dest: string]; ret: void }
   'mt::fs::empty-dir': { args: [path: string]; ret: void }
@@ -92,7 +127,7 @@ export interface IpcInvokeChannels {
 export interface IpcSendChannels {
   'app-create-editor-window': [config?: unknown]
   'app-create-settings-window': []
-  'app-open-directory-by-id': [windowId: number, dirPath: string]
+  'app-open-directory-by-id': [windowId: number, dirPath: string, openInSameWindow?: boolean]
   'app-open-file-by-id': [windowId: number, filePath: string, options?: unknown]
   'app-open-files-by-id': [windowId: number, filePaths: string[], options?: unknown]
   'app-open-markdown-by-id': [windowId: number, markdown: string, options?: unknown]
@@ -258,6 +293,8 @@ export interface IpcMainEventChannels {
   'mt::rg::error': [payload: unknown]
   'mt::rg::match': [payload: unknown]
   'mt::rg::progress': [payload: unknown]
+  'mt::git::progress': [payload: GitProgressEvent]
+  'mt::git::status-changed': [payload: GitStatusResult]
   'mt::screenshot-captured': []
   'mt::set-line-ending': [lineEnding: LineEnding]
   'mt::set-pathname': [payload: { id: string; pathname: string; filename: string }]

@@ -165,6 +165,35 @@ declare global {
     list(): Promise<string[]>
   }
 
+  interface GitAPI {
+    detectRepo(startPath: string): Promise<string | null>
+    status(startPath: string): Promise<import('@shared/types/git').GitStatusResult>
+    fetch(repoRoot: string): Promise<import('@shared/types/git').GitStatusResult>
+    diff(repoRoot: string, filePath: string): Promise<import('@shared/types/git').GitDiffResult>
+    stage(repoRoot: string, paths?: string[]): Promise<void>
+    commit(req: import('@shared/types/git').GitCommitRequest): Promise<import('@shared/types/git').GitCommitResult>
+    push(repoRoot: string): Promise<import('@shared/types/git').GitStatusResult>
+    pull(
+      repoRoot: string
+    ): Promise<import('@shared/types/git').GitPullResult & { status: import('@shared/types/git').GitStatusResult }>
+    publish(payload: {
+      repoRoot: string
+      message: string
+      author: { name: string; email: string }
+    }): Promise<import('@shared/types/git').GitStatusResult>
+    clone(req: import('@shared/types/git').GitCloneRequest): Promise<import('@shared/types/git').GitCloneResult>
+    savePat(hostKey: string, pat: string): Promise<void>
+    deletePat(hostKey: string): Promise<void>
+    hasPat(hostKey: string): Promise<boolean>
+    hostKeyFromUrl(url: string): Promise<string>
+    hostKeyForRepo(repoRoot: string): Promise<string | null>
+    normalizeUrl(
+      url: string
+    ): Promise<{ url: string; hostKey: string; repoName: string | null }>
+    onProgress(handler: (payload: import('@shared/types/git').GitProgressEvent) => void): () => void
+    onStatusChanged(handler: (payload: import('@shared/types/git').GitStatusResult) => void): () => void
+  }
+
   interface ProcessShim {
     platform: NodeJS.Platform
     arch?: string
@@ -184,6 +213,7 @@ declare global {
     ripgrep: RipgrepAPI
     uploader: UploaderAPI
     fonts: FontsAPI
+    git: GitAPI
     process: ProcessShim
     rgPath: string
     // Set by the legacy editor store at runtime; consumed by muya internals.

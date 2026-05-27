@@ -7,6 +7,7 @@ import { registerFontsHandlers } from './fonts'
 import { registerShellHandlers } from './shell'
 import { registerWindowHandlers } from './window'
 import { registerCmdHandlers } from './cmd'
+import { registerGitHandlers } from './git'
 import { registerI18nHandlers } from './i18n'
 
 export const registerSandboxIpcHandlers = (): void => {
@@ -20,4 +21,5 @@ export const registerSandboxIpcHandlers = (): void => {
   registerWindowHandlers()
   registerCmdHandlers()
   registerI18nHandlers()
+  registerGitHandlers()
 }

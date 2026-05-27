@@ -285,7 +285,64 @@
       "files": "Files",
       "search": "Search",
       "toc": "Table of Contents",
+      "git": "Source Control",
       "settings": "Settings"
+    },
+    "git": {
+      "noFolderOpen": "Open a folder to see your changes",
+      "openFolder": "Open Folder",
+      "notConnected": "This folder isn't connected to shared documentation yet",
+      "connect": "Connect to shared folder",
+      "workingOn": "Working on: {branch}",
+      "teamChanges": "{count} new team changes available",
+      "unsharedSnapshots": "{count} snapshots not shared yet",
+      "upToDate": "You're up to date",
+      "getLatest": "Get latest changes",
+      "yourChanges": "Your changes ({count})",
+      "changeModified": "You changed this",
+      "changeAdded": "New file",
+      "changeDeleted": "Removed",
+      "review": "Review",
+      "reviewChange": "Review change",
+      "reviewAll": "Review all",
+      "share": "Share with team",
+      "noChanges": "No pending changes",
+      "conflictMessage": "We couldn't automatically combine changes. These files need your attention:"
+    }
+  },
+  "git": {
+    "clone": {
+      "title": "Connect to documentation repository",
+      "stepUrl": "Link",
+      "stepToken": "Access",
+      "stepFolder": "Folder",
+      "urlHint": "Paste the link to your Azure DevOps documentation repository.",
+      "urlPlaceholder": "https://dev.azure.com/org/project/_git/repo",
+      "tokenHint": "Enter your personal access token. It will be saved securely on this computer.",
+      "tokenPlaceholder": "Personal access token",
+      "folderHint": "Choose where to save the documentation on your computer.",
+      "folderPlaceholder": "Folder path",
+      "back": "Back",
+      "next": "Next",
+      "connect": "Connect",
+      "cloning": "Connecting..."
+    },
+    "commit": {
+      "title": "Share with team",
+      "hint": "Briefly describe what you changed.",
+      "placeholder": "Updated setup guide and fixed typos",
+      "cancel": "Cancel",
+      "share": "Share",
+      "successTitle": "Shared",
+      "successMessage": "Your changes were shared with the team."
+    },
+    "diff": {
+      "title": "Review changes",
+      "close": "Close",
+      "summary": "{added} lines added, {removed} lines removed"
+    },
+    "errors": {
+      "unknown": "Something went wrong. Please try again."
     }
   },
   "commandPalette": {

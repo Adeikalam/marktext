@@ -196,10 +196,10 @@ class Watcher {
     const watcher = chokidar.watch(watchPath, {
       ignored: (pathname: string, fileInfo?: { isDirectory: () => boolean }) => {
         if (!fileInfo) {
-          return /(?:^|[/\\])(?:node_modules|(?:.+\.asar))/.test(pathname)
+          return /(?:^|[/\\])(?:node_modules|\.git|(?:.+\.asar))/.test(pathname)
         }
 
-        if (/(?:^|[/\\])(?:node_modules|(?:.+\.asar))/.test(pathname)) {
+        if (/(?:^|[/\\])(?:node_modules|\.git|(?:.+\.asar))/.test(pathname)) {
           return true
         }
 

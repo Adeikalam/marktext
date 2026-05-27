@@ -33,6 +33,9 @@
       <export-setting-dialog />
       <rename />
       <import-modal />
+      <clone-wizard />
+      <diff-view />
+      <commit-dialog />
     </div>
   </div>
 </template>
@@ -51,6 +54,9 @@ import CommandPalette from '@/components/commandPalette/index.vue'
 import ExportSettingDialog from '@/components/exportSettings/index.vue'
 import Rename from '@/components/rename/index.vue'
 import ImportModal from '@/components/import/index.vue'
+import CloneWizard from '@/components/git/CloneWizard.vue'
+import DiffView from '@/components/git/DiffView.vue'
+import CommitDialog from '@/components/git/CommitDialog.vue'
 import bus from '@/bus'
 import { DEFAULT_STYLE } from '@/config'
 import { useLayoutStore } from '@/store/layout'
@@ -61,6 +67,7 @@ import { useCommandCenterStore } from '@/store/commandCenter'
 import { useProjectStore } from '@/store/project'
 import { useAutoUpdatesStore } from '@/store/autoUpdates'
 import { useNotificationStore } from '@/store/notification'
+import { useGitStore } from '@/store/git'
 
 const mainStore = useMainStore()
 const editorStore = useEditorStore()
@@ -71,6 +78,7 @@ const listenForMainStore = useListenForMainStore()
 const autoUpdateStore = useAutoUpdatesStore()
 const commandCenterStore = useCommandCenterStore()
 const notificationStore = useNotificationStore()
+const gitStore = useGitStore()
 
 const timer = ref<ReturnType<typeof setTimeout> | null>(null)
 
@@ -195,6 +203,9 @@ onMounted(async () => {
 
   // module: notification
   notificationStore.listenForNotification()
+
+  gitStore.LISTEN_FOR_GIT()
+  gitStore.watchProject()
 
   setupDragDropHandler()
 
